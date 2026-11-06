@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+dist/
+artifacts/
+.vs/
+.idea/
+*.user
+*.pdb
+preferences.json
+运行状态.json
+*.vscdb*
+*.log
+*.error
+.env*
+auth.json
