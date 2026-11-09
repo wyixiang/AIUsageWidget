@@ -9,11 +9,12 @@ internal sealed class DetailsWindow : GlassWindow
     private readonly TaskbarContext _context;
     private bool _closeForTheme;
     private readonly C.StackPanel _body;
+    private readonly List<(C.TextBlock Text, CodexBoardWidget.UsageWindow Window)> _resetTimes = new();
     private readonly C.Button _codexTab, _cursorTab;
     internal DetailsWindow(TaskbarContext context) : base(context.IsDark)
     {
         _context = context;
-        Title = "AI 额度详情";
+        Title = "AI 用量";
         Width = 410; SizeToContent = W.SizeToContent.Height;
         ShowInTaskbar = true; Topmost = false; ShowActivated = true; ResizeMode = W.ResizeMode.CanMinimize;
         IsVisibleChanged += (_, _) => context.WriteStatus();
@@ -40,6 +41,8 @@ internal sealed class DetailsWindow : GlassWindow
         tabs.ColumnDefinitions.Add(new C.ColumnDefinition()); tabs.ColumnDefinitions.Add(new C.ColumnDefinition());
         var codex = _codexTab = Button("Codex", Colors, () => { context.CursorDetails = false; UpdateValues(); }, "\uE945");
         var cursor = _cursorTab = Button("Cursor", Colors, () => { context.CursorDetails = true; UpdateValues(); }, "\uE8B0");
+        var codexContent=(C.Grid)codex.Content; codexContent.Children.RemoveAt(0); codexContent.Children.Insert(0, ProductIcons.Create(false, Colors.Muted));
+        var cursorContent=(C.Grid)cursor.Content; cursorContent.Children.RemoveAt(0); cursorContent.Children.Insert(0, ProductIcons.Create(true, Colors.Muted));
         C.Grid.SetColumn(cursor, 1); tabs.Children.Add(codex); tabs.Children.Add(cursor); layout.Children.Add(tabs);
         _body = new C.StackPanel(); layout.Children.Add(_body);
         var footer = new C.StackPanel { Margin = new W.Thickness(0, 12, 0, 0) };
@@ -49,11 +52,15 @@ internal sealed class DetailsWindow : GlassWindow
         header.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 1 && e.OriginalSource is C.TextBlock) DragMove(); };
     }
     internal void CloseForTheme() { _closeForTheme = true; Close(); }
+    internal void UpdateCountdowns()
+    {
+        foreach(var (text, window) in _resetTimes) text.Text = UsageLabels.Reset(window.ResetsAt, window.Duration);
+    }
     internal void UpdateValues()
     {
         _codexTab.Background = _context.CursorDetails ? System.Windows.Media.Brushes.Transparent : Colors.Hover;
         _cursorTab.Background = _context.CursorDetails ? Colors.Hover : System.Windows.Media.Brushes.Transparent;
-        _body.Children.Clear();
+        _resetTimes.Clear(); _body.Children.Clear();
         var error = _context.CursorDetails ? _context.CursorError : _context.Error;
         if ((_context.CursorDetails ? _context.CursorSnapshot : _context.Snapshot) is not { } snapshot)
         {
@@ -74,7 +81,8 @@ internal sealed class DetailsWindow : GlassWindow
             var fill = new C.Border { CornerRadius = new W.CornerRadius(3), Background = Colors.Accent, HorizontalAlignment = W.HorizontalAlignment.Left };
             track.SizeChanged += (_, _) => fill.Width = track.ActualWidth * Math.Clamp(w.Remaining / 100, 0, 1);
             track.Children.Add(fill); content.Children.Add(track);
-            content.Children.Add(new C.TextBlock { Text = UsageLabels.Reset(w.ResetsAt), FontSize = 12, Foreground = Colors.Muted, TextWrapping = W.TextWrapping.Wrap });
+            var resetText = new C.TextBlock { Text = UsageLabels.Reset(w.ResetsAt, w.Duration), FontSize = 12, Foreground = Colors.Muted, TextWrapping = W.TextWrapping.Wrap };
+            content.Children.Add(resetText); _resetTimes.Add((resetText, w));
             _body.Children.Add(new C.Border { Background = Colors.Card, BorderBrush = Colors.Stroke, BorderThickness = new W.Thickness(1), CornerRadius = new W.CornerRadius(8), Margin = new W.Thickness(0, 4, 0, 4), Child = content });
         }
         if (_context.CursorDetails)

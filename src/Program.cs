@@ -5,6 +5,7 @@ namespace CodexTaskbar;
 
 internal static class Program
 {
+    // Keep the legacy IPC names so older launchers still reach this single instance.
     [STAThread]
     private static void Main(string[] args)
     {
@@ -129,6 +130,8 @@ internal sealed class TaskbarContext : IDisposable
         }
         if (_lastDark != IsDark) Repaint();
         _dock.DockToTaskbar();
+        _dock.UpdateCountdowns();
+        if (_details is { IsDisposed: false }) _details.UpdateCountdowns();
         if (_menuSignal.WaitOne(0)) _dock.ShowModernMenu();
         if (_showSignal.WaitOne(0)) ShowDetails();
         if (!_refreshing && DateTimeOffset.Now >= _nextRefresh) _ = RefreshAsync();

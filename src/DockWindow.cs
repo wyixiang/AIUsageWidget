@@ -9,6 +9,8 @@ namespace CodexTaskbar;
 internal sealed class DockWindow : GlassWindow
 {
     private readonly TaskbarContext _context;
+    private readonly List<QuotaMeter> _meters = new();
+    private long _tooltipMinute = -1;
     private Point? _press;
     private int _startOffset;
     private bool _dragged;
@@ -24,8 +26,8 @@ internal sealed class DockWindow : GlassWindow
     internal DockWindow(TaskbarContext context) : base(context.IsDark)
     {
         _context = context;
-        Title = "Codex 任务栏额度"; ShowActivated = false; ShowInTaskbar = context.InspectUi;
-        Width = 360; Height = 40; Surface.CornerRadius = new W.CornerRadius(9);
+        Title = "AI 用量 · 任务栏"; ShowActivated = false; ShowInTaskbar = context.InspectUi;
+        Width = 425; Height = 44; Surface.CornerRadius = new W.CornerRadius(9);
         ToolTip = "剩余额度 · 单击查看详情 · 右键设置屏幕和位置";
         SourceInitialized += (_, _) => Native.SetWindowLongPtr(Handle,-20,new IntPtr(Native.GetWindowLongPtr(Handle,-20).ToInt64() | 0x08000000L));
         MouseLeftButtonDown += (_, e) => { _press = System.Windows.Forms.Cursor.Position; _startOffset = context.Settings.Offset; _dragged = false; e.Handled = true; };
@@ -52,28 +54,29 @@ internal sealed class DockWindow : GlassWindow
     }
     internal void Invalidate()
     {
+        _meters.Clear();
         var dark = _context.IsDark; UpdateBackdrop(dark); var p = new Palette(dark);
         Surface.Background = Palette.Brush(dark ? "#C8262C33" : "#C8F8FAFC"); Surface.BorderBrush = p.Stroke;
-        var grid = new C.Grid { Margin = new W.Thickness(10, 2, 10, 2), Cursor = I.Cursors.Hand };
+        var grid = new C.Grid { Margin = new W.Thickness(10, 0, 10, 0), Cursor = I.Cursors.Hand };
         grid.RowDefinitions.Add(new C.RowDefinition()); grid.RowDefinitions.Add(new C.RowDefinition());
         foreach(var width in new[]{new W.GridLength(108),new W.GridLength(1,W.GridUnitType.Star),new W.GridLength(10),new W.GridLength(1,W.GridUnitType.Star)}) grid.ColumnDefinitions.Add(new C.ColumnDefinition { Width = width });
         void Row(int row, string label, CodexBoardWidget.UsageSnapshot? snapshot, string? error, bool cursor)
         {
             var brand = new C.StackPanel { Orientation = C.Orientation.Horizontal, VerticalAlignment = W.VerticalAlignment.Center };
-            brand.Children.Add(new C.TextBlock { Text = cursor ? "\uE8B0" : "\uE945", FontFamily = new M.FontFamily("Segoe Fluent Icons"), FontSize = 12, Foreground = cursor ? p.Text : p.Accent, VerticalAlignment = W.VerticalAlignment.Center });
+            brand.Children.Add(ProductIcons.Create(cursor, p.Muted));
             brand.Children.Add(new C.TextBlock { Text = label, FontFamily = new M.FontFamily("Segoe UI"), FontSize = 12, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text, Margin = new W.Thickness(6,0,0,0) });
-            if (snapshot?.Plan is { } package) brand.Children.Add(new C.TextBlock { Text = UsageLabels.Plan(package), FontFamily = new M.FontFamily("Segoe UI"), FontSize = 10, Foreground = p.Muted, Margin = new W.Thickness(5, 1, 0, 0), VerticalAlignment = W.VerticalAlignment.Center });
+            if (snapshot?.Plan is { } package) brand.Children.Add(new C.TextBlock { Text = UsageLabels.Plan(package), FontFamily = new M.FontFamily("Segoe UI"), FontSize = 11, Foreground = p.Muted, Margin = new W.Thickness(5, 1, 0, 0), VerticalAlignment = W.VerticalAlignment.Center });
             C.Grid.SetRow(brand,row); grid.Children.Add(brand);
             var windows = snapshot?.Windows.Take(cursor ? 1 : 2).ToArray();
             if(windows is { Length: >0 })
             {
                 for(var index=0;index<windows.Length;index++)
                 {
-                    var quota = windows[index]; var line = new C.StackPanel { Orientation = C.Orientation.Horizontal, VerticalAlignment = W.VerticalAlignment.Center };
-                    var name = cursor ? quota.Duration==10080 ? "本周" : "套餐" : quota.Duration==300 ? "5h" : "本周";
-                    line.Children.Add(new C.TextBlock { Text = name, FontSize = 10, Foreground = p.Muted, VerticalAlignment = W.VerticalAlignment.Center, Margin = new W.Thickness(0,0,6,0) });
-                    line.Children.Add(new C.TextBlock { Text = $"{quota.Remaining:0}%", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 14, FontWeight = W.FontWeights.SemiBold, Foreground = quota.Remaining<=15 ? Palette.Brush("#B77718") : p.Text });
-                    C.Grid.SetRow(line,row); C.Grid.SetColumn(line,index==0?1:3); grid.Children.Add(line);
+                    var quota = windows[index];
+                    var name = cursor ? quota.Duration==10080 ? "周" : "套餐" : quota.Duration==300 ? "5h" : "周";
+                    var meter = new QuotaMeter(name, quota, p);
+                    _meters.Add(meter);
+                    C.Grid.SetRow(meter,row); C.Grid.SetColumn(meter,index==0?1:3); grid.Children.Add(meter);
                 }
             }
             else
@@ -87,13 +90,23 @@ internal sealed class DockWindow : GlassWindow
         ToolTip = _context.Error is not null || _context.CursorError is not null ? "部分额度未更新。点击详情切换 Codex / Cursor 查看状态。" : "剩余额度 · 单击详情 · 右键设置屏幕和位置";
         if (_context.CursorSnapshot is { } cursorSnapshot)
         {
-            var creditLine = new C.StackPanel { Orientation = C.Orientation.Horizontal, VerticalAlignment = W.VerticalAlignment.Center };
-            creditLine.Children.Add(new C.TextBlock { Text = "Credit", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 10, Foreground = p.Muted, VerticalAlignment = W.VerticalAlignment.Center, Margin = new W.Thickness(0, 0, 5, 0) });
-            creditLine.Children.Add(new C.TextBlock { Text = cursorSnapshot.Credits ?? "—", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 13, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text });
+            var creditLine = new C.Grid { Height=18, VerticalAlignment = W.VerticalAlignment.Top };
+            creditLine.Children.Add(new C.TextBlock { Text = "Credit", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 11, Foreground = p.Muted, VerticalAlignment = W.VerticalAlignment.Center });
+            creditLine.Children.Add(new C.TextBlock { Text = cursorSnapshot.Credits ?? "—", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 13, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text, HorizontalAlignment=W.HorizontalAlignment.Right, VerticalAlignment=W.VerticalAlignment.Center });
             C.Grid.SetRow(creditLine, 1); C.Grid.SetColumn(creditLine, 3); grid.Children.Add(creditLine);
         }
         ToolTip = UsageLabels.Summary("Codex", _context.Snapshot) + "\n\n" + UsageLabels.Summary("Cursor", _context.CursorSnapshot);
         Surface.Child = grid;
+    }
+    internal void UpdateCountdowns()
+    {
+        foreach(var meter in _meters) meter.UpdateCountdown();
+        var minute = DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 60;
+        if(minute != _tooltipMinute)
+        {
+            _tooltipMinute = minute;
+            ToolTip = UsageLabels.Summary("Codex", _context.Snapshot) + "\n\n" + UsageLabels.Summary("Cursor", _context.CursorSnapshot);
+        }
     }
     internal void ShowModernMenu()
     {
@@ -121,7 +134,7 @@ internal sealed class DockWindow : GlassWindow
         var taskbar=Native.Taskbars().FirstOrDefault(h=>Screen.FromHandle(h).DeviceName==selected.DeviceName);
         if(taskbar==IntPtr.Zero || !Native.GetWindowRect(taskbar,out var r)) { Hide(); Attached=false; return; }
         var scale=Math.Max(96,Native.GetDpiForWindow(taskbar))/96.0;
-        var height=Math.Min((int)Math.Round(40*scale),Math.Max(24,r.Bottom-r.Top-4)); var width=(int)Math.Round(360*scale);
+        var height=Math.Min((int)Math.Round(44*scale),Math.Max(24,r.Bottom-r.Top-4)); var width=(int)Math.Round(425*scale);
         var x=Math.Clamp((int)((r.Right-r.Left)*_context.Settings.LeftFraction+_context.Settings.Offset*scale),8,Math.Max(8,r.Right-r.Left-width-(int)Math.Round(96*scale))); var y=(r.Bottom-r.Top-height)/2;
         var screen=selected.Bounds;
         if(r.Top>=screen.Bottom-3 || r.Bottom<=screen.Top+3 || Native.IsFullscreenForeground(screen,Handle)) { Hide(); return; }
