@@ -83,7 +83,7 @@ internal sealed class DetailsWindow : GlassWindow
     internal void CloseForTheme() { _closeForTheme = true; Close(); }
     internal void UpdateCountdowns()
     {
-        foreach(var (text, window) in _resetTimes) text.Text = UsageLabels.Reset(window.ResetsAt, window.Duration);
+        foreach(var (text, window) in _resetTimes) text.Text = UsageLabels.Reset(window.ResetsAt, window.Duration, _context.CountdownNow);
     }
     internal void UpdateValues()
     {
@@ -110,7 +110,7 @@ internal sealed class DetailsWindow : GlassWindow
             var fill = new C.Border { CornerRadius = new W.CornerRadius(3), Background = Colors.Accent, HorizontalAlignment = W.HorizontalAlignment.Left };
             track.SizeChanged += (_, _) => fill.Width = track.ActualWidth * Math.Clamp(w.Remaining / 100, 0, 1);
             track.Children.Add(fill); content.Children.Add(track);
-            var resetText = new C.TextBlock { Text = UsageLabels.Reset(w.ResetsAt, w.Duration), FontSize = 12, Foreground = Colors.Muted, TextWrapping = W.TextWrapping.Wrap };
+            var resetText = new C.TextBlock { Text = UsageLabels.Reset(w.ResetsAt, w.Duration, _context.CountdownNow), FontSize = 12, Foreground = Colors.Muted, TextWrapping = W.TextWrapping.Wrap };
             content.Children.Add(resetText); _resetTimes.Add((resetText, w));
             _body.Children.Add(new C.Border { Background = Colors.Card, BorderBrush = Colors.Stroke, BorderThickness = new W.Thickness(1), CornerRadius = new W.CornerRadius(8), Margin = new W.Thickness(0, 4, 0, 4), Child = content });
         }

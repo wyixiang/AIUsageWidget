@@ -8,7 +8,7 @@ internal sealed class QuotaMeter : C.Grid
     internal readonly UsageWindow Window;
     internal readonly C.ProgressBar UsageBar;
     internal readonly C.TextBlock ResetText;
-    internal QuotaMeter(string name,UsageWindow window,Palette palette)
+    internal QuotaMeter(string name,UsageWindow window,Palette palette,DateTimeOffset now)
     {
         Window=window;
         VerticalAlignment=W.VerticalAlignment.Center;
@@ -34,9 +34,9 @@ internal sealed class QuotaMeter : C.Grid
         UsageBar.Template=new C.ControlTemplate(typeof(C.ProgressBar)) { VisualTree=background };
         W.Automation.AutomationProperties.SetName(UsageBar,$"{name}剩余用量");
         C.Grid.SetRow(UsageBar,1); C.Grid.SetColumnSpan(UsageBar,4); Children.Add(UsageBar);
-        ResetText=new C.TextBlock { Text=UsageLabels.ResetSuffix(window.ResetsAt,window.Duration),FontFamily=new M.FontFamily("Segoe UI"),FontSize=11,Foreground=palette.Muted,VerticalAlignment=W.VerticalAlignment.Center,TextAlignment=W.TextAlignment.Right };
+        ResetText=new C.TextBlock { Text=UsageLabels.ResetSuffix(window.ResetsAt,window.Duration,now),FontFamily=new M.FontFamily("Segoe UI"),FontSize=11,Foreground=palette.Muted,VerticalAlignment=W.VerticalAlignment.Center,TextAlignment=W.TextAlignment.Right };
         ResetText.Typography.NumeralAlignment=W.FontNumeralAlignment.Tabular;
         C.Grid.SetColumn(ResetText,3); Children.Add(ResetText);
     }
-    internal void UpdateCountdown() => ResetText.Text=UsageLabels.ResetSuffix(Window.ResetsAt,Window.Duration);
+    internal void UpdateCountdown(DateTimeOffset now) => ResetText.Text=UsageLabels.ResetSuffix(Window.ResetsAt,Window.Duration,now);
 }

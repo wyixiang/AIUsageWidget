@@ -69,6 +69,7 @@ internal sealed class TaskbarContext : IDisposable
     internal UsageSnapshot? CursorSnapshot;
     internal string? CursorError;
     internal bool CursorDetails;
+    internal DateTimeOffset CountdownNow { get; private set; } = DateTimeOffset.Now;
     internal readonly Preferences Settings = Preferences.Load();
     private DockWindow? _dock;
     private DetailsWindow? _details;
@@ -125,6 +126,7 @@ internal sealed class TaskbarContext : IDisposable
     private void Tick()
     {
         if (_exitSignal.WaitOne(0)) { Quit(); return; }
+        CountdownNow = DateTimeOffset.Now;
         if (_dock is null || _dock.IsDisposed)
         {
             _dock = new DockWindow(this);

@@ -10,7 +10,6 @@ internal sealed class DockWindow : GlassWindow
 {
     private readonly TaskbarContext _context;
     private readonly List<QuotaMeter> _meters = new();
-    private long _tooltipMinute = -1;
     private Point? _press;
     private int _startOffset;
     private bool _dragged;
@@ -74,7 +73,7 @@ internal sealed class DockWindow : GlassWindow
                 {
                     var quota = windows[index];
                     var name = cursor ? quota.Duration==10080 ? "周" : "套餐" : quota.Duration==300 ? "5h" : "周";
-                    var meter = new QuotaMeter(name, quota, p);
+                    var meter = new QuotaMeter(name, quota, p, _context.CountdownNow);
                     _meters.Add(meter);
                     C.Grid.SetRow(meter,row); C.Grid.SetColumn(meter,index==0?1:3); grid.Children.Add(meter);
                 }
@@ -95,18 +94,14 @@ internal sealed class DockWindow : GlassWindow
             creditLine.Children.Add(new C.TextBlock { Text = cursorSnapshot.Credits ?? "—", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 13, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text, HorizontalAlignment=W.HorizontalAlignment.Right, VerticalAlignment=W.VerticalAlignment.Center });
             C.Grid.SetRow(creditLine, 1); C.Grid.SetColumn(creditLine, 3); grid.Children.Add(creditLine);
         }
-        ToolTip = UsageLabels.Summary("Codex", _context.Snapshot) + "\n\n" + UsageLabels.Summary("Cursor", _context.CursorSnapshot);
+        ToolTip = UsageLabels.Summary("Codex", _context.Snapshot, _context.CountdownNow) + "\n\n" + UsageLabels.Summary("Cursor", _context.CursorSnapshot, _context.CountdownNow);
         Surface.Child = grid;
     }
     internal void UpdateCountdowns()
     {
-        foreach(var meter in _meters) meter.UpdateCountdown();
-        var minute = DateTimeOffset.UtcNow.ToUnixTimeSeconds() / 60;
-        if(minute != _tooltipMinute)
-        {
-            _tooltipMinute = minute;
-            ToolTip = UsageLabels.Summary("Codex", _context.Snapshot) + "\n\n" + UsageLabels.Summary("Cursor", _context.CursorSnapshot);
-        }
+        foreach(var meter in _meters) meter.UpdateCountdown(_context.CountdownNow);
+        var summary = UsageLabels.Summary("Codex", _context.Snapshot, _context.CountdownNow) + "\n\n" + UsageLabels.Summary("Cursor", _context.CursorSnapshot, _context.CountdownNow);
+        if (!Equals(ToolTip, summary)) ToolTip = summary;
     }
     internal void ShowModernMenu()
     {

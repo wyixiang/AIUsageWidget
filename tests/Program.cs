@@ -52,6 +52,12 @@ Check(UsageLabels.ResetSuffix(null,10080,fixedNow)=="—", "unknown reset does n
 Check(UsageLabels.ResetSuffix(fixedNow.ToUnixTimeSeconds(),300,fixedNow)=="待刷新", "elapsed reset remains a refresh status");
 Check(UsageLabels.ResetSuffix(fixedNow.AddHours(4).AddMinutes(51).ToUnixTimeSeconds(),300,fixedNow)=="4h51m后", "hour-minute taskbar reset has natural compact spacing");
 Check(UsageLabels.ResetSuffix(fixedNow.AddDays(6).AddHours(23).ToUnixTimeSeconds(),10080,fixedNow)=="6d23h后", "day-hour taskbar reset has natural compact spacing");
+var partialMinuteReset=fixedNow.AddMinutes(17).AddSeconds(20).ToUnixTimeSeconds();
+Check(UsageLabels.ResetSuffix(partialMinuteReset,300,fixedNow)=="18m后" && UsageLabels.Reset(partialMinuteReset,300,fixedNow).EndsWith("18分钟后"), "taskbar and details both round partial minutes up");
+partialMinuteReset=fixedNow.AddMinutes(59).AddSeconds(59).ToUnixTimeSeconds();
+Check(UsageLabels.ResetSuffix(partialMinuteReset,10080,fixedNow)=="1h后" && UsageLabels.Reset(partialMinuteReset,10080,fixedNow).EndsWith("1小时0分钟后"), "taskbar and details agree across the hour boundary");
+partialMinuteReset=fixedNow.AddHours(3).AddMinutes(25).AddSeconds(1).ToUnixTimeSeconds();
+Check(UsageLabels.ResetSuffix(partialMinuteReset,300,fixedNow)=="3h26m后" && UsageLabels.Reset(partialMinuteReset,300,fixedNow).EndsWith("3小时26分钟后"), "hour-minute labels share the same minute rounding");
 var popup = DetailsPlacement.Above(new(220,1034,425,44),new(0,0,1920,1032),new(410,550),10,8);
 Check(popup.Left==220 && popup.Bottom==1024, "details open above and aligned with the taskbar card");
 popup = DetailsPlacement.Above(new(3700,1034,425,44),new(1920,0,1920,1032),new(410,550),10,8);

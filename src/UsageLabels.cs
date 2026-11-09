@@ -15,7 +15,7 @@ internal static class UsageLabels
             var days = hours / 24; var remainder = hours % 24;
             return remainder > 0 ? $"{days}d {remainder}h" : $"{days}d";
         }
-        var minutes = Math.Max(1, (long)Math.Floor(delta.TotalMinutes));
+        var minutes = RemainingMinutes(delta);
         var totalHours = minutes / 60; var remainingMinutes = minutes % 60;
         if(totalHours == 0) return $"{remainingMinutes}m";
         return remainingMinutes > 0 ? $"{totalHours}h {remainingMinutes}m" : $"{totalHours}h";
@@ -30,14 +30,16 @@ internal static class UsageLabels
         if(seconds is null or <=0 or >=253402300800) return "重置时间暂未返回";
         var reset=DateTimeOffset.FromUnixTimeSeconds(seconds.Value).ToLocalTime();
         var delta=reset-(now ?? DateTimeOffset.Now);
-        var left=delta.TotalSeconds<=0 ? "等待刷新" : delta.TotalDays>=1 ? $"{(int)delta.TotalDays}天{delta.Hours}小时后" : delta.TotalHours>=1 ? $"{(int)delta.TotalHours}小时{delta.Minutes}分钟后" : $"{Math.Max(1,(int)Math.Ceiling(delta.TotalMinutes))}分钟后";
+        var minutes=RemainingMinutes(delta);
+        var left=delta.TotalSeconds<=0 ? "等待刷新" : delta.TotalDays>=1 ? $"{(int)delta.TotalDays}天{delta.Hours}小时后" : minutes>=60 ? $"{minutes/60}小时{minutes%60}分钟后" : $"{minutes}分钟后";
         return $"{reset:MM月dd日 HH:mm} 重置 · {left}";
     }
-    internal static string Summary(string provider, UsageSnapshot? snapshot)
+    private static long RemainingMinutes(TimeSpan remaining) => Math.Max(1, (long)Math.Ceiling(remaining.TotalMinutes));
+    internal static string Summary(string provider, UsageSnapshot? snapshot, DateTimeOffset? now = null)
     {
         if(snapshot is null) return provider+" · 正在读取";
         var lines=new List<string> { provider+" · "+Plan(snapshot.Plan) };
-        foreach(var window in snapshot.Windows) lines.Add($"{window.Name}：剩余 {window.Remaining:0.#}%\n{Reset(window.ResetsAt, window.Duration)}");
+        foreach(var window in snapshot.Windows) lines.Add($"{window.Name}：剩余 {window.Remaining:0.#}%\n{Reset(window.ResetsAt, window.Duration, now)}");
         if(provider=="Cursor") lines.Add("Credit："+(snapshot.Credits??"暂不可用")+" · 独立余额");
         return string.Join("\n",lines);
     }
