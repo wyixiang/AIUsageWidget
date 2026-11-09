@@ -52,3 +52,13 @@ Check(UsageLabels.ResetSuffix(null,10080,fixedNow)=="—", "unknown reset does n
 Check(UsageLabels.ResetSuffix(fixedNow.ToUnixTimeSeconds(),300,fixedNow)=="待刷新", "elapsed reset remains a refresh status");
 Check(UsageLabels.ResetSuffix(fixedNow.AddHours(4).AddMinutes(51).ToUnixTimeSeconds(),300,fixedNow)=="4h51m后", "hour-minute taskbar reset has natural compact spacing");
 Check(UsageLabels.ResetSuffix(fixedNow.AddDays(6).AddHours(23).ToUnixTimeSeconds(),10080,fixedNow)=="6d23h后", "day-hour taskbar reset has natural compact spacing");
+var popup = DetailsPlacement.Above(new(220,1034,425,44),new(0,0,1920,1032),new(410,550),10,8);
+Check(popup.Left==220 && popup.Bottom==1024, "details open above and aligned with the taskbar card");
+popup = DetailsPlacement.Above(new(3700,1034,425,44),new(1920,0,1920,1032),new(410,550),10,8);
+Check(popup.Right==3832 && popup.Bottom==1024, "details stay within the anchor monitor at the right edge");
+popup = DetailsPlacement.Above(new(-1912,1034,425,44),new(-1920,0,1920,1032),new(410,550),10,8);
+Check(popup.Left==-1912 && popup.Bottom==1024, "details support monitors with negative desktop coordinates");
+popup = DetailsPlacement.Above(new(2000,1395,638,66),new(1920,0,2560,1392),new(615,825),15,12);
+Check(popup.Left==2000 && popup.Bottom==1380 && popup.Width==615, "placement uses target-monitor physical pixels at higher DPI");
+popup = DetailsPlacement.Above(new(0,300,425,44),new(0,0,800,300),new(410,550),10,8);
+Check(popup.Top==8 && popup.Bottom==292, "short work areas constrain details instead of placing them offscreen");

@@ -33,7 +33,7 @@ internal static class Program
         }
         var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
         using var context = new TaskbarContext(args.Contains("--inspect-ui"));
-        app.Dispatcher.BeginInvoke(new Action(context.ShowDetails));
+        if (args.Contains("--details")) app.Dispatcher.BeginInvoke(new Action(context.ShowDetails));
         app.Run();
     }
 }
@@ -76,6 +76,7 @@ internal sealed class TaskbarContext : IDisposable
     private readonly Icon _trayIcon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? SystemIcons.Application;
     private readonly System.Windows.Threading.DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly TaskbarLayerWatcher _layerWatcher;
     private readonly EventWaitHandle _exitSignal = new(false, EventResetMode.AutoReset, @"Local\CodexTaskbar.Exit");
     private readonly EventWaitHandle _menuSignal = new(false, EventResetMode.AutoReset, @"Local\CodexTaskbar.Menu");
     private readonly EventWaitHandle _showSignal = new(false, EventResetMode.AutoReset, @"Local\CodexTaskbar.Show");
@@ -90,6 +91,7 @@ internal sealed class TaskbarContext : IDisposable
         _tray.Icon = _trayIcon; _tray.Text = "AI 用量 · 双击打开详情"; _tray.Visible = true;
         _tray.DoubleClick += (_, _) => ShowDetails();
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Right) _dock?.ShowModernMenu(); };
+        _layerWatcher = new(System.Windows.Application.Current.Dispatcher, RestoreDockLayer);
         SynchronizationContext.SetSynchronizationContext(new System.Windows.Threading.DispatcherSynchronizationContext(System.Windows.Threading.Dispatcher.CurrentDispatcher));
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += DisplaySettingsChanged;
         Microsoft.Win32.SystemEvents.PowerModeChanged += PowerModeChanged;
@@ -111,13 +113,14 @@ internal sealed class TaskbarContext : IDisposable
         {
             if(_quitting) return;
             _dock?.PrepareForReconnect(); _dock?.DockToTaskbar();
+            PositionDetails();
             _nextRefresh=DateTimeOffset.MinValue; WriteStatus();
         }));
     }
     internal void SelectDisplay(DisplayEntry display)
     {
         Settings.MonitorDevice=display.DeviceName; Settings.MonitorIdentity=display.Identity; Settings.Save();
-        _dock?.PrepareForReconnect(); _dock?.DockToTaskbar(); WriteStatus();
+        _dock?.PrepareForReconnect(); _dock?.DockToTaskbar(); PositionDetails(); WriteStatus();
     }
     private void Tick()
     {
@@ -174,6 +177,7 @@ internal sealed class TaskbarContext : IDisposable
                 AutoRefreshSeconds = 60,
                 DetailsVisible = _details?.IsVisible ?? false,
                 DetailsState = _details?.WindowState.ToString(),
+                DetailsBounds = _details is { IsVisible: true, WindowState: System.Windows.WindowState.Normal } detail && Native.GetWindowRect(new System.Windows.Interop.WindowInteropHelper(detail).Handle, out var detailsRect) ? new { detailsRect.Left, detailsRect.Top, Width = detailsRect.Right - detailsRect.Left, Height = detailsRect.Bottom - detailsRect.Top } : null,
                 TrayVisible = _tray.Visible,
                 AnchoredToTaskbar = _dock is { IsDisposed: false } && _dock.Attached,
                 DisplayMode = "Taskbar-aligned independent window",
@@ -206,16 +210,24 @@ internal sealed class TaskbarContext : IDisposable
         _details.UpdateValues();
         _details.Show();
         _details.WindowState = System.Windows.WindowState.Normal;
-        if (_dock is { IsDisposed: false })
-        {
-            var area = Screen.FromRectangle(_dock.Bounds).WorkingArea;
-            var scale = Math.Max(96, Native.GetDpiForWindow(new System.Windows.Interop.WindowInteropHelper(_details).Handle)) / 96.0;
-            _details.Left = (area.Left + (area.Width - _details.ActualWidth * scale) / 2) / scale;
-            _details.Top = (area.Top + (area.Height - _details.ActualHeight * scale) / 2) / scale;
-        }
+        PositionDetails();
         var handle = new System.Windows.Interop.WindowInteropHelper(_details).Handle;
         Native.ShowWindow(handle, 9);
         _details.Activate(); Native.SetForegroundWindow(handle); WriteStatus();
+    }
+    internal void PositionDetails(DetailsWindow? expected = null)
+    {
+        if (_quitting || _details is not { IsDisposed: false, IsVisible: true } details || expected is not null && details != expected || _dock is not { IsDisposed: false, Visible: true } dock) return;
+        var bounds = dock.Bounds;
+        var scale = Math.Max(96, Native.GetDpiForWindow(dock.Handle)) / 96.0;
+        details.PositionAbove(bounds, Screen.FromRectangle(bounds).WorkingArea, scale);
+    }
+    internal void DismissDetails() { if (_details is { IsDisposed: false }) _details.Dismiss(); }
+    internal void RestoreDockLayer()
+    {
+        if (_quitting) return;
+        _dock?.DockToTaskbar();
+        WriteStatus();
     }
     internal void Repaint()
     {
@@ -230,6 +242,7 @@ internal sealed class TaskbarContext : IDisposable
                 _details = new DetailsWindow(this) { Left = left, Top = top, WindowState = state, ShowActivated = state != System.Windows.WindowState.Minimized };
                 System.Windows.Application.Current.MainWindow = _details;
                 _details.UpdateValues(); _details.Show();
+                PositionDetails();
             }
         }
     }
@@ -250,6 +263,7 @@ internal sealed class TaskbarContext : IDisposable
     {
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= DisplaySettingsChanged;
         Microsoft.Win32.SystemEvents.PowerModeChanged -= PowerModeChanged;
+        _layerWatcher.Dispose();
         _tray.Visible = false; _tray.Dispose(); _trayIcon.Dispose(); _timer.Stop(); _lifetime.Cancel(); _lifetime.Dispose(); _exitSignal.Dispose(); _menuSignal.Dispose(); _showSignal.Dispose();
 
     }

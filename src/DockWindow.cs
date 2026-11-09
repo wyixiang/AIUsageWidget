@@ -111,6 +111,7 @@ internal sealed class DockWindow : GlassWindow
     internal void ShowModernMenu()
     {
         if(_menu is { IsDisposed:false }) { _menu.Close(); return; }
+        _context.DismissDetails();
         _menu=new ModernMenu(_context,this);  _menu.Show(); _menu.Activate();
     }
     internal void DockToTaskbar()
@@ -162,6 +163,12 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern bool ShowWindow(IntPtr window, int command);
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(IntPtr window,System.Text.StringBuilder text,int count);
+    internal static bool IsTaskbar(IntPtr window)
+    {
+        if(window == IntPtr.Zero) return false;
+        var name = new System.Text.StringBuilder(128); GetClassName(window, name, name.Capacity);
+        return name.ToString() is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
+    }
     internal static bool IsFullscreenForeground(Rectangle screen,IntPtr own)
     {
         var foreground=GetForegroundWindow(); if(foreground==IntPtr.Zero || foreground==own || !GetWindowRect(foreground,out var r)) return false;

@@ -8,6 +8,7 @@ internal sealed class DetailsWindow : GlassWindow
 {
     private readonly TaskbarContext _context;
     private bool _closeForTheme;
+    private bool _positioning;
     private readonly C.StackPanel _body;
     private readonly List<(C.TextBlock Text, CodexBoardWidget.UsageWindow Window)> _resetTimes = new();
     private readonly C.Button _codexTab, _cursorTab;
@@ -19,9 +20,16 @@ internal sealed class DetailsWindow : GlassWindow
         ShowInTaskbar = true; Topmost = false; ShowActivated = true; ResizeMode = W.ResizeMode.CanMinimize;
         IsVisibleChanged += (_, _) => context.WriteStatus();
         StateChanged += (_, _) => context.WriteStatus();
+        Deactivated += (_, _) => Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
+        {
+            // Deactivation may precede minimization; wait for the final window state.
+            if (!context.IsQuitting && !_closeForTheme && !IsDisposed && !IsClosing && IsVisible && !IsActive && WindowState == W.WindowState.Normal) Dismiss();
+        }));
+        SizeChanged += (_, _) => context.PositionDetails(this);
+        ContentRendered += (_, _) => context.PositionDetails(this);
         WindowStartupLocation = W.WindowStartupLocation.Manual;
         var layout = new C.StackPanel { Margin = new W.Thickness(22, 16, 22, 20) };
-        Surface.Child = layout;
+        Surface.Child = new C.ScrollViewer { Content = layout, VerticalScrollBarVisibility = C.ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = C.ScrollBarVisibility.Disabled };
         var header = new C.Grid { Margin = new W.Thickness(0, 0, 0, 12) };
         header.Children.Add(new C.TextBlock { Text = "AI 用量", FontSize = 20, FontWeight = W.FontWeights.SemiBold, VerticalAlignment = W.VerticalAlignment.Center });
         C.Button Caption(string name, string glyph, Action action)
@@ -33,9 +41,9 @@ internal sealed class DetailsWindow : GlassWindow
         }
         var captions = new C.StackPanel { Orientation = C.Orientation.Horizontal, HorizontalAlignment = W.HorizontalAlignment.Right };
         captions.Children.Add(Caption("最小化", "\uE921", () => WindowState = W.WindowState.Minimized));
-        captions.Children.Add(Caption("关闭到系统托盘", "\uE8BB", Hide));
+        captions.Children.Add(Caption("关闭到系统托盘", "\uE8BB", Dismiss));
         header.Children.Add(captions);
-        Closing += (_, e) => { if (!context.IsQuitting && !_closeForTheme) { e.Cancel = true; Hide(); } };
+        Closing += (_, e) => { if (!context.IsQuitting && !_closeForTheme) { e.Cancel = true; Dismiss(); } };
         layout.Children.Add(header);
         var tabs = new C.Grid { Margin = new W.Thickness(0, 0, 0, 8) };
         tabs.ColumnDefinitions.Add(new C.ColumnDefinition()); tabs.ColumnDefinitions.Add(new C.ColumnDefinition());
@@ -49,7 +57,28 @@ internal sealed class DetailsWindow : GlassWindow
         footer.Children.Add(Button("刷新额度", Colors, () => _ = context.RefreshAsync(), "\uE72C"));
         footer.Children.Add(Button("打开当前平台用量页", Colors, () => Process.Start(new ProcessStartInfo(context.CursorDetails ? "https://cursor.com/dashboard/usage" : "https://chatgpt.com/settings/usage") { UseShellExecute = true }), "\uE774"));
         layout.Children.Add(footer);
-        header.MouseLeftButtonDown += (_, e) => { if (e.ClickCount == 1 && e.OriginalSource is C.TextBlock) DragMove(); };
+    }
+    internal void Dismiss()
+    {
+        Hide();
+        _context.RestoreDockLayer();
+    }
+    internal void PositionAbove(Rectangle anchor, Rectangle workArea, double scale)
+    {
+        if (_positioning || IsDisposed || !IsVisible || WindowState != W.WindowState.Normal || anchor.IsEmpty) return;
+        _positioning = true;
+        try
+        {
+            var margin = (int)Math.Round(8 * scale);
+            var gap = (int)Math.Round(10 * scale);
+            MaxWidth = Math.Max(1, (workArea.Width - 2 * margin) / scale);
+            MaxHeight = Math.Max(1, (Math.Min(workArea.Bottom, anchor.Top - gap) - workArea.Top - margin) / scale);
+            UpdateLayout();
+            var rect = DetailsPlacement.Above(anchor, workArea, new Size((int)Math.Ceiling(ActualWidth * scale), (int)Math.Ceiling(ActualHeight * scale)), gap, margin);
+            var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            Native.SetWindowPos(handle, IntPtr.Zero, rect.Left, rect.Top, rect.Width, rect.Height, 0x0014);
+        }
+        finally { _positioning = false; }
     }
     internal void CloseForTheme() { _closeForTheme = true; Close(); }
     internal void UpdateCountdowns()
