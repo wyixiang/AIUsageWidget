@@ -9,6 +9,7 @@ internal static class UsageLabels
         if(seconds is null or <=0 or >=253402300800) return "—";
         var delta = DateTimeOffset.FromUnixTimeSeconds(seconds.Value) - (now ?? DateTimeOffset.Now);
         if(delta.TotalSeconds <= 0) return "待刷新";
+        if(delta.TotalSeconds <= 60) return $"{RemainingSeconds(delta)}s";
         if(duration != 300 && delta.TotalDays >= 1)
         {
             var hours = (long)Math.Floor(delta.TotalHours);
@@ -31,10 +32,11 @@ internal static class UsageLabels
         var reset=DateTimeOffset.FromUnixTimeSeconds(seconds.Value).ToLocalTime();
         var delta=reset-(now ?? DateTimeOffset.Now);
         var minutes=RemainingMinutes(delta);
-        var left=delta.TotalSeconds<=0 ? "等待刷新" : delta.TotalDays>=1 ? $"{(int)delta.TotalDays}天{delta.Hours}小时后" : minutes>=60 ? $"{minutes/60}小时{minutes%60}分钟后" : $"{minutes}分钟后";
+        var left=delta.TotalSeconds<=0 ? "等待刷新" : delta.TotalSeconds<=60 ? $"{RemainingSeconds(delta)}秒后" : delta.TotalDays>=1 ? $"{(int)delta.TotalDays}天{delta.Hours}小时后" : minutes>=60 ? $"{minutes/60}小时{minutes%60}分钟后" : $"{minutes}分钟后";
         return $"{reset:MM月dd日 HH:mm} 重置 · {left}";
     }
     private static long RemainingMinutes(TimeSpan remaining) => Math.Max(1, (long)Math.Ceiling(remaining.TotalMinutes));
+    private static long RemainingSeconds(TimeSpan remaining) => Math.Max(1, (long)Math.Ceiling(remaining.TotalSeconds));
     internal static string Summary(string provider, UsageSnapshot? snapshot, DateTimeOffset? now = null)
     {
         if(snapshot is null) return provider+" · 正在读取";
