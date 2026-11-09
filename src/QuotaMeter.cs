@@ -8,6 +8,7 @@ internal sealed class QuotaMeter : C.Grid
     internal readonly UsageWindow Window;
     internal readonly C.ProgressBar UsageBar;
     internal readonly C.TextBlock ResetText;
+    private readonly C.TextBlock _resetIcon;
     internal QuotaMeter(string name,UsageWindow window,Palette palette,DateTimeOffset now)
     {
         Window=window;
@@ -34,9 +35,18 @@ internal sealed class QuotaMeter : C.Grid
         UsageBar.Template=new C.ControlTemplate(typeof(C.ProgressBar)) { VisualTree=background };
         W.Automation.AutomationProperties.SetName(UsageBar,$"{name}剩余用量");
         C.Grid.SetRow(UsageBar,1); C.Grid.SetColumnSpan(UsageBar,4); Children.Add(UsageBar);
-        ResetText=new C.TextBlock { Text=UsageLabels.ResetSuffix(window.ResetsAt,window.Duration,now),FontFamily=new M.FontFamily("Segoe UI"),FontSize=11,Foreground=palette.Muted,VerticalAlignment=W.VerticalAlignment.Center,TextAlignment=W.TextAlignment.Right };
+        var resetGroup=new C.StackPanel { Orientation=C.Orientation.Horizontal,HorizontalAlignment=W.HorizontalAlignment.Right,VerticalAlignment=W.VerticalAlignment.Center,ToolTip="距额度重置" };
+        ResetText=new C.TextBlock { FontFamily=new M.FontFamily("Segoe UI"),FontSize=11,Foreground=palette.Muted,VerticalAlignment=W.VerticalAlignment.Center,TextAlignment=W.TextAlignment.Right };
         ResetText.Typography.NumeralAlignment=W.FontNumeralAlignment.Tabular;
-        C.Grid.SetColumn(ResetText,3); Children.Add(ResetText);
+        _resetIcon=new C.TextBlock { Text="\uE72C",FontFamily=new M.FontFamily("Segoe Fluent Icons"),FontSize=10,Width=11,Foreground=palette.Muted,Margin=new W.Thickness(3,0,0,0),VerticalAlignment=W.VerticalAlignment.Center };
+        W.Automation.AutomationProperties.SetName(_resetIcon,"Quota reset");
+        resetGroup.Children.Add(ResetText); resetGroup.Children.Add(_resetIcon);
+        C.Grid.SetColumn(resetGroup,3); Children.Add(resetGroup);
+        UpdateCountdown(now);
     }
-    internal void UpdateCountdown(DateTimeOffset now) => ResetText.Text=UsageLabels.ResetSuffix(Window.ResetsAt,Window.Duration,now);
+    internal void UpdateCountdown(DateTimeOffset now)
+    {
+        ResetText.Text=UsageLabels.BarCountdown(Window.ResetsAt,Window.Duration,now);
+        _resetIcon.Visibility=ResetText.Text=="—" ? W.Visibility.Hidden : W.Visibility.Visible;
+    }
 }

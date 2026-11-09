@@ -64,7 +64,7 @@ internal sealed class DockWindow : GlassWindow
             var brand = new C.StackPanel { Orientation = C.Orientation.Horizontal, VerticalAlignment = W.VerticalAlignment.Center };
             brand.Children.Add(ProductIcons.Create(cursor, p.Muted));
             brand.Children.Add(new C.TextBlock { Text = label, FontFamily = new M.FontFamily("Segoe UI"), FontSize = 12, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text, Margin = new W.Thickness(6,0,0,0) });
-            if (snapshot?.Plan is { } package) brand.Children.Add(new C.TextBlock { Text = UsageLabels.Plan(package), FontFamily = new M.FontFamily("Segoe UI"), FontSize = 11, Foreground = p.Muted, Margin = new W.Thickness(5, 1, 0, 0), VerticalAlignment = W.VerticalAlignment.Center });
+            if (!string.IsNullOrWhiteSpace(snapshot?.Plan)) brand.Children.Add(new C.TextBlock { Text = UsageLabels.Plan(snapshot.Plan), FontFamily = new M.FontFamily("Segoe UI"), FontSize = 11, Foreground = p.Muted, Margin = new W.Thickness(5, 1, 0, 0), VerticalAlignment = W.VerticalAlignment.Center });
             C.Grid.SetRow(brand,row); grid.Children.Add(brand);
             var windows = snapshot?.Windows.Take(cursor ? 1 : 2).ToArray();
             if(windows is { Length: >0 })
@@ -72,7 +72,7 @@ internal sealed class DockWindow : GlassWindow
                 for(var index=0;index<windows.Length;index++)
                 {
                     var quota = windows[index];
-                    var name = cursor ? quota.Duration==10080 ? "周" : "套餐" : quota.Duration==300 ? "5h" : "周";
+                    var name = cursor ? quota.Duration==10080 ? "Wk" : "Plan" : quota.Duration==300 ? "5h" : "Wk";
                     var meter = new QuotaMeter(name, quota, p, _context.CountdownNow);
                     _meters.Add(meter);
                     C.Grid.SetRow(meter,row); C.Grid.SetColumn(meter,index==0?1:3); grid.Children.Add(meter);
@@ -80,7 +80,7 @@ internal sealed class DockWindow : GlassWindow
             }
             else
             {
-                var message = new C.TextBlock { Text = error is null ? "正在读取…" : "额度暂不可用", FontSize = 11, Foreground = p.Muted, VerticalAlignment = W.VerticalAlignment.Center };
+                var message = new C.TextBlock { Text = error is null ? "Loading…" : "Unavailable", FontSize = 11, Foreground = p.Muted, VerticalAlignment = W.VerticalAlignment.Center };
                 C.Grid.SetRow(message,row); C.Grid.SetColumn(message,1); C.Grid.SetColumnSpan(message,3); grid.Children.Add(message);
             }
         }

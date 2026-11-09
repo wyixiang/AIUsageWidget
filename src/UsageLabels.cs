@@ -21,10 +21,10 @@ internal static class UsageLabels
         if(totalHours == 0) return $"{remainingMinutes}m";
         return remainingMinutes > 0 ? $"{totalHours}h {remainingMinutes}m" : $"{totalHours}h";
     }
-    internal static string ResetSuffix(long? seconds, long? duration, DateTimeOffset? now = null)
+    internal static string BarCountdown(long? seconds, long? duration, DateTimeOffset? now = null)
     {
         var text = Countdown(seconds, duration, now);
-        return text is "—" or "待刷新" ? text : text.Replace(" ", "") + "后";
+        return text == "待刷新" ? "Due" : text.Replace(" ", "");
     }
     internal static string Reset(long? seconds, long? duration = null, DateTimeOffset? now = null)
     {

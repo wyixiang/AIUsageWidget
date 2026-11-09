@@ -46,31 +46,31 @@ Check(UsageLabels.Countdown(fixedNow.AddDays(2).ToUnixTimeSeconds(),10080,fixedN
 Check(UsageLabels.Countdown(fixedNow.AddHours(3).ToUnixTimeSeconds(),300,fixedNow)=="3h", "hour reset drops zero minutes");
 Check(UsageLabels.Reset(fixedNow.AddHours(3).AddMinutes(25).ToUnixTimeSeconds(),300,fixedNow).EndsWith("3小时25分钟后"), "details keep Chinese hour-minute countdown");
 Check(UsageLabels.Reset(fixedNow.AddDays(6).AddHours(2).ToUnixTimeSeconds(),10080,fixedNow).EndsWith("6天2小时后"), "details keep Chinese day-hour countdown");
-Check(UsageLabels.ResetSuffix(fixedNow.AddMinutes(35).ToUnixTimeSeconds(),300,fixedNow)=="35m后", "taskbar reset annotation ends in after suffix");
-Check(UsageLabels.ResetSuffix(fixedNow.AddDays(5).AddHours(6).ToUnixTimeSeconds(),10080,fixedNow)=="5d6h后", "weekly taskbar reset annotation keeps compact units without padding");
-Check(UsageLabels.ResetSuffix(null,10080,fixedNow)=="—", "unknown reset does not get misleading after suffix");
-Check(UsageLabels.ResetSuffix(fixedNow.ToUnixTimeSeconds(),300,fixedNow)=="待刷新", "elapsed reset remains a refresh status");
-Check(UsageLabels.ResetSuffix(fixedNow.AddHours(4).AddMinutes(51).ToUnixTimeSeconds(),300,fixedNow)=="4h51m后", "hour-minute taskbar reset has natural compact spacing");
-Check(UsageLabels.ResetSuffix(fixedNow.AddDays(6).AddHours(23).ToUnixTimeSeconds(),10080,fixedNow)=="6d23h后", "day-hour taskbar reset has natural compact spacing");
+Check(UsageLabels.BarCountdown(fixedNow.AddMinutes(35).ToUnixTimeSeconds(),300,fixedNow)=="35m", "taskbar countdown omits language-specific suffix");
+Check(UsageLabels.BarCountdown(fixedNow.AddDays(5).AddHours(6).ToUnixTimeSeconds(),10080,fixedNow)=="5d6h", "weekly taskbar reset annotation keeps compact units without padding");
+Check(UsageLabels.BarCountdown(null,10080,fixedNow)=="—", "unknown reset stays unavailable");
+Check(UsageLabels.BarCountdown(fixedNow.ToUnixTimeSeconds(),300,fixedNow)=="Due", "elapsed taskbar reset uses English due status");
+Check(UsageLabels.BarCountdown(fixedNow.AddHours(4).AddMinutes(51).ToUnixTimeSeconds(),300,fixedNow)=="4h51m", "hour-minute taskbar reset has natural compact spacing");
+Check(UsageLabels.BarCountdown(fixedNow.AddDays(6).AddHours(23).ToUnixTimeSeconds(),10080,fixedNow)=="6d23h", "day-hour taskbar reset has natural compact spacing");
 var partialMinuteReset=fixedNow.AddMinutes(17).AddSeconds(20).ToUnixTimeSeconds();
 foreach (var period in new long[] {300,10080})
 {
     foreach (var remainingSeconds in new[] {60,59,30,1})
     {
         var reset=fixedNow.AddSeconds(remainingSeconds).ToUnixTimeSeconds();
-        Check(UsageLabels.ResetSuffix(reset,period,fixedNow)==$"{remainingSeconds}s后" && UsageLabels.Reset(reset,period,fixedNow).EndsWith($"{remainingSeconds}秒后"), $"{period}-minute period agrees on seconds at {remainingSeconds}s remaining");
+        Check(UsageLabels.BarCountdown(reset,period,fixedNow)==$"{remainingSeconds}s" && UsageLabels.Reset(reset,period,fixedNow).EndsWith($"{remainingSeconds}秒后"), $"{period}-minute period agrees on seconds at {remainingSeconds}s remaining");
     }
 }
 var subSecondReset=fixedNow.AddSeconds(1).ToUnixTimeSeconds();
-Check(UsageLabels.ResetSuffix(subSecondReset,300,fixedNow.AddMilliseconds(900))=="1s后" && UsageLabels.Reset(subSecondReset,300,fixedNow.AddMilliseconds(900)).EndsWith("1秒后"), "positive fractional second does not prematurely show zero");
-Check(UsageLabels.ResetSuffix(subSecondReset,300,fixedNow.AddSeconds(1))=="待刷新" && UsageLabels.Reset(subSecondReset,300,fixedNow.AddSeconds(1)).EndsWith("等待刷新"), "second countdown transitions to waiting at expiration");
+Check(UsageLabels.BarCountdown(subSecondReset,300,fixedNow.AddMilliseconds(900))=="1s" && UsageLabels.Reset(subSecondReset,300,fixedNow.AddMilliseconds(900)).EndsWith("1秒后"), "positive fractional second does not prematurely show zero");
+Check(UsageLabels.BarCountdown(subSecondReset,300,fixedNow.AddSeconds(1))=="Due" && UsageLabels.Reset(subSecondReset,300,fixedNow.AddSeconds(1)).EndsWith("等待刷新"), "second countdown transitions to waiting at expiration");
 var summarySnapshot=new CodexBoardWidget.UsageSnapshot(new[]{new CodexBoardWidget.UsageWindow("5 小时额度",50,fixedNow.AddSeconds(45).ToUnixTimeSeconds(),300)},"plus",null,fixedNow);
 Check(UsageLabels.Summary("Codex",summarySnapshot,fixedNow).Contains("45秒后"), "hover summary uses the same seconds format as details");
-Check(UsageLabels.ResetSuffix(partialMinuteReset,300,fixedNow)=="18m后" && UsageLabels.Reset(partialMinuteReset,300,fixedNow).EndsWith("18分钟后"), "taskbar and details both round partial minutes up");
+Check(UsageLabels.BarCountdown(partialMinuteReset,300,fixedNow)=="18m" && UsageLabels.Reset(partialMinuteReset,300,fixedNow).EndsWith("18分钟后"), "taskbar and details both round partial minutes up");
 partialMinuteReset=fixedNow.AddMinutes(59).AddSeconds(59).ToUnixTimeSeconds();
-Check(UsageLabels.ResetSuffix(partialMinuteReset,10080,fixedNow)=="1h后" && UsageLabels.Reset(partialMinuteReset,10080,fixedNow).EndsWith("1小时0分钟后"), "taskbar and details agree across the hour boundary");
+Check(UsageLabels.BarCountdown(partialMinuteReset,10080,fixedNow)=="1h" && UsageLabels.Reset(partialMinuteReset,10080,fixedNow).EndsWith("1小时0分钟后"), "taskbar and details agree across the hour boundary");
 partialMinuteReset=fixedNow.AddHours(3).AddMinutes(25).AddSeconds(1).ToUnixTimeSeconds();
-Check(UsageLabels.ResetSuffix(partialMinuteReset,300,fixedNow)=="3h26m后" && UsageLabels.Reset(partialMinuteReset,300,fixedNow).EndsWith("3小时26分钟后"), "hour-minute labels share the same minute rounding");
+Check(UsageLabels.BarCountdown(partialMinuteReset,300,fixedNow)=="3h26m" && UsageLabels.Reset(partialMinuteReset,300,fixedNow).EndsWith("3小时26分钟后"), "hour-minute labels share the same minute rounding");
 var popup = DetailsPlacement.Above(new(220,1034,425,44),new(0,0,1920,1032),new(410,550),10,8);
 Check(popup.Left==220 && popup.Bottom==1024, "details open above and aligned with the taskbar card");
 popup = DetailsPlacement.Above(new(3700,1034,425,44),new(1920,0,1920,1032),new(410,550),10,8);
