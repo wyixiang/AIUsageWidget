@@ -74,7 +74,9 @@ internal sealed class TaskbarContext : IDisposable
     private DockWindow? _dock;
     private DetailsWindow? _details;
     private readonly NotifyIcon _tray = new();
-    private readonly Icon _trayIcon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? SystemIcons.Application;
+    private Icon? _trayIcon;
+    private bool? _trayIconDark;
+    private int _trayIconSize;
     private readonly System.Windows.Threading.DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly CancellationTokenSource _lifetime = new();
     private readonly TaskbarLayerWatcher _layerWatcher;
@@ -89,7 +91,7 @@ internal sealed class TaskbarContext : IDisposable
     internal TaskbarContext(bool inspectUi = false)
     {
         InspectUi = inspectUi;
-        _tray.Icon = _trayIcon; _tray.Text = "AI 用量 · 双击打开详情"; _tray.Visible = true;
+        UpdateTrayIcon(); _tray.Text = "AI 用量 · 双击打开详情"; _tray.Visible = true;
         _tray.DoubleClick += (_, _) => ShowDetails();
         _tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Right) _dock?.ShowModernMenu(); };
         _layerWatcher = new(System.Windows.Application.Current.Dispatcher, RestoreDockLayer);
@@ -127,10 +129,10 @@ internal sealed class TaskbarContext : IDisposable
     {
         if (_exitSignal.WaitOne(0)) { Quit(); return; }
         CountdownNow = DateTimeOffset.Now;
+        UpdateTrayIcon();
         if (_dock is null || _dock.IsDisposed)
         {
             _dock = new DockWindow(this);
-
             _dock.Show();
         }
         if (_lastDark != IsDark) Repaint();
@@ -181,6 +183,9 @@ internal sealed class TaskbarContext : IDisposable
                 DetailsState = _details?.WindowState.ToString(),
                 DetailsBounds = _details is { IsVisible: true, WindowState: System.Windows.WindowState.Normal } detail && Native.GetWindowRect(new System.Windows.Interop.WindowInteropHelper(detail).Handle, out var detailsRect) ? new { detailsRect.Left, detailsRect.Top, Width = detailsRect.Right - detailsRect.Left, Height = detailsRect.Bottom - detailsRect.Top } : null,
                 TrayVisible = _tray.Visible,
+                TrayIcon = "circle-gauge",
+                TrayIconDark = _trayIconDark,
+                TrayIconSize = _trayIconSize,
                 AnchoredToTaskbar = _dock is { IsDisposed: false } && _dock.Attached,
                 DisplayMode = "Taskbar-aligned independent window",
                 MonitorDevice = _dock?.MonitorDevice,
@@ -216,6 +221,19 @@ internal sealed class TaskbarContext : IDisposable
         var handle = new System.Windows.Interop.WindowInteropHelper(_details).Handle;
         Native.ShowWindow(handle, 9);
         _details.Activate(); Native.SetForegroundWindow(handle); WriteStatus();
+    }
+    private void UpdateTrayIcon()
+    {
+        var dark = SystemTheme.IsTaskbarDark;
+        var size = Math.Clamp(SystemInformation.SmallIconSize.Width, 16, 64);
+        if (_trayIcon is not null && _trayIconDark == dark && _trayIconSize == size) return;
+        var next = GaugeIcon.Create(size, dark);
+        var windowIcon = GaugeIcon.Render(32, dark);
+        _tray.Icon = next;
+        var previous = _trayIcon;
+        _trayIcon = next; _trayIconDark = dark; _trayIconSize = size;
+        foreach (System.Windows.Window window in System.Windows.Application.Current.Windows) window.Icon = windowIcon;
+        previous?.Dispose();
     }
     internal void PositionDetails(DetailsWindow? expected = null)
     {
@@ -266,7 +284,7 @@ internal sealed class TaskbarContext : IDisposable
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= DisplaySettingsChanged;
         Microsoft.Win32.SystemEvents.PowerModeChanged -= PowerModeChanged;
         _layerWatcher.Dispose();
-        _tray.Visible = false; _tray.Dispose(); _trayIcon.Dispose(); _timer.Stop(); _lifetime.Cancel(); _lifetime.Dispose(); _exitSignal.Dispose(); _menuSignal.Dispose(); _showSignal.Dispose();
+        _tray.Visible = false; _tray.Dispose(); _trayIcon?.Dispose(); _timer.Stop(); _lifetime.Cancel(); _lifetime.Dispose(); _exitSignal.Dispose(); _menuSignal.Dispose(); _showSignal.Dispose();
 
     }
 }

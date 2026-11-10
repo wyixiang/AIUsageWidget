@@ -59,6 +59,19 @@ internal static class DisplayCatalog
 }
 internal static class SystemTheme
 {
+    internal static bool IsTaskbarDark
+    {
+        get
+        {
+            try
+            {
+                using var key=Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",false);
+                return key?.GetValue("SystemUsesLightTheme") is int value ? value==0 : IsDark;
+            }
+            catch(System.Security.SecurityException) { return IsDark; }
+            catch(UnauthorizedAccessException) { return IsDark; }
+        }
+    }
     internal static bool IsDark
     {
         get

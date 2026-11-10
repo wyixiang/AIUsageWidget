@@ -2,7 +2,7 @@
 
 ## Lucide icons
 
-The terminal and mouse-pointer-2 icons are from https://github.com/lucide-icons/lucide. They are embedded locally; the app does not download icons at runtime.
+The terminal, mouse-pointer-2 and circle-gauge icons are from https://github.com/lucide-icons/lucide. They are embedded locally; the app does not download icons at runtime.
 
 ISC License
 

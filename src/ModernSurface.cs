@@ -61,7 +61,7 @@ internal class GlassWindow : W.Window
         PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) { Close(); e.Handled = true; } };
         Closed += (_, _) => IsDisposed = true;
 
-        Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/app.ico"));
+        Icon = GaugeIcon.Render(32, SystemTheme.IsTaskbarDark);
     }
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
