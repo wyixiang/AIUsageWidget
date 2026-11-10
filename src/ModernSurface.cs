@@ -58,7 +58,7 @@ internal class GlassWindow : W.Window
         M.TextOptions.SetTextFormattingMode(this, M.TextFormattingMode.Display);
         M.TextOptions.SetTextRenderingMode(this, M.TextRenderingMode.Grayscale);
         SourceInitialized += (_, _) => ApplyBackdrop();
-        PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) { Close(); e.Handled = true; } };
+        PreviewKeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) { OnEscape(); e.Handled = true; } };
         Closed += (_, _) => IsDisposed = true;
 
         Icon = GaugeIcon.Render(32, SystemTheme.IsTaskbarDark);
@@ -67,6 +67,7 @@ internal class GlassWindow : W.Window
     {
         base.OnClosing(e); IsClosing = !e.Cancel;
     }
+    protected virtual void OnEscape() => Close();
     internal void UpdateBackdrop(bool dark)
     {
         if (_dark == dark) return;

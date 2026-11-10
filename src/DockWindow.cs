@@ -19,7 +19,7 @@ internal sealed class DockWindow : GlassWindow
     internal string? MonitorDevice { get; private set; }
     internal string? MonitorIdentity { get; private set; }
     internal void PrepareForReconnect() => _monitorSelection.BeginReconnect(DateTimeOffset.UtcNow);
-    internal IntPtr Handle => new H.WindowInteropHelper(this).EnsureHandle();
+    internal IntPtr Handle => IsDisposed || IsClosing ? IntPtr.Zero : new H.WindowInteropHelper(this).EnsureHandle();
     internal bool Visible => IsVisible;
     internal Rectangle Bounds => Native.GetWindowRect(Handle, out var r) ? Rectangle.FromLTRB(r.Left,r.Top,r.Right,r.Bottom) : Rectangle.Empty;
     internal DockWindow(TaskbarContext context) : base(context.IsDark)
@@ -50,6 +50,16 @@ internal sealed class DockWindow : GlassWindow
         MouseRightButtonUp += (_, e) => { ShowModernMenu(); e.Handled = true; };
         Closed += (_, _) => { if (_menu is { IsDisposed: false }) _menu.Close(); };
         Invalidate();
+    }
+    protected override void OnEscape() => _context.DismissDetails();
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_context.IsQuitting)
+        {
+            e.Cancel = true;
+            _context.DismissDetails();
+        }
+        base.OnClosing(e);
     }
     internal void Invalidate()
     {
@@ -111,6 +121,7 @@ internal sealed class DockWindow : GlassWindow
     }
     internal void DockToTaskbar()
     {
+        if (IsDisposed || IsClosing || _context.IsQuitting) return;
         var displays=DisplayCatalog.Read();
         var candidates=displays.Select(d=>new MonitorCandidate(d.DeviceName,d.Identity,d.Screen.Primary)).ToArray();
         var choice=_monitorSelection.Resolve(candidates,_context.Settings.MonitorIdentity,_context.Settings.MonitorDevice,DateTimeOffset.UtcNow);

@@ -23,13 +23,19 @@ internal sealed class TaskbarLayerWatcher : IDisposable
     }
     void OnEvent(IntPtr hook,uint eventType,IntPtr window,int objectId,int childId,uint eventThread,uint eventTime)
     {
-        if(disposed || (eventType!=3 && !Native.IsTaskbar(window))) return;
+        if(disposed || dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished || (eventType!=3 && !Native.IsTaskbar(window))) return;
         if(Interlocked.Exchange(ref pending,1)!=0) return;
-        dispatcher.BeginInvoke(DispatcherPriority.Render,new Action(()=>
+        try { dispatcher.BeginInvoke(DispatcherPriority.Render,new Action(()=>
         {
             Interlocked.Exchange(ref pending,0);
-            if(!disposed) update();
-        }));
+            if(disposed || dispatcher.HasShutdownStarted) return;
+            try { update(); }
+            catch(Exception) { }
+        })); }
+        catch(InvalidOperationException)
+        {
+            Interlocked.Exchange(ref pending,0);
+        }
     }
     public void Dispose()
     {

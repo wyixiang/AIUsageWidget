@@ -33,6 +33,7 @@ internal static class Program
         }
         var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
         using var context = new TaskbarContext(args.Contains("--inspect-ui"));
+        app.SessionEnding += (_, e) => context.PrepareForSystemShutdown(e.ReasonSessionEnding.ToString());
         if (args.Contains("--details")) app.Dispatcher.BeginInvoke(new Action(context.ShowDetails));
         app.Run();
     }
@@ -245,8 +246,8 @@ internal sealed class TaskbarContext : IDisposable
     internal void DismissDetails() { if (_details is { IsDisposed: false }) _details.Dismiss(); }
     internal void RestoreDockLayer()
     {
-        if (_quitting) return;
-        _dock?.DockToTaskbar();
+        if (_quitting || _dock is not { IsDisposed: false, IsClosing: false } dock) return;
+        dock.DockToTaskbar();
         WriteStatus();
     }
     internal void Repaint()
@@ -265,6 +266,11 @@ internal sealed class TaskbarContext : IDisposable
                 PositionDetails();
             }
         }
+    }
+    internal void PrepareForSystemShutdown(string reason)
+    {
+        if (_quitting) return;
+        _quitting = true; _timer.Stop(); _lifetime.Cancel();
     }
     internal async void Quit()
     {

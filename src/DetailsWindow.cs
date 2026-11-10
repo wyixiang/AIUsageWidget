@@ -60,6 +60,7 @@ internal sealed class DetailsWindow : GlassWindow
     }
     internal void Dismiss()
     {
+        if (IsDisposed || IsClosing || _context.IsQuitting) return;
         Hide();
         _context.RestoreDockLayer();
     }
