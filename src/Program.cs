@@ -9,9 +9,6 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
         if (args.Length == 1 && args[0] == "--menu")
         {
             try { using var signal = EventWaitHandle.OpenExisting(@"Local\CodexTaskbar.Menu"); signal.Set(); }
@@ -31,11 +28,34 @@ internal static class Program
             catch (WaitHandleCannotBeOpenedException) { }
             return;
         }
-        var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
-        using var context = new TaskbarContext(args.Contains("--inspect-ui"));
-        app.SessionEnding += (_, e) => context.PrepareForSystemShutdown(e.ReasonSessionEnding.ToString());
-        if (args.Contains("--details")) app.Dispatcher.BeginInvoke(new Action(context.ShowDetails));
-        app.Run();
+        AppDiagnostics.Start();
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception error) AppDiagnostics.Fault("appdomain-unhandled", error);
+        };
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => AppDiagnostics.Finish(Environment.ExitCode, "process-exit-without-shutdown-request");
+        TaskScheduler.UnobservedTaskException += (_, e) => AppDiagnostics.Error("unobserved-background-task", e.Exception);
+        try
+        {
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            var app = new System.Windows.Application { ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown };
+            app.DispatcherUnhandledException += (_, e) => AppDiagnostics.Fault("dispatcher-unhandled", e.Exception);
+            int exitCode;
+            using (var context = new TaskbarContext(args.Contains("--inspect-ui")))
+            {
+                app.SessionEnding += (_, e) => context.PrepareForSystemShutdown(e.ReasonSessionEnding.ToString());
+                if (args.Contains("--details")) app.Dispatcher.BeginInvoke(new Action(context.ShowDetails));
+                exitCode = app.Run();
+            }
+            AppDiagnostics.Finish(exitCode, "dispatcher-loop-ended");
+        }
+        catch (Exception error)
+        {
+            AppDiagnostics.Fault("main-unhandled", error);
+            throw;
+        }
     }
 }
 
@@ -128,12 +148,14 @@ internal sealed class TaskbarContext : IDisposable
     }
     private void Tick()
     {
-        if (_exitSignal.WaitOne(0)) { Quit(); return; }
+        if (_exitSignal.WaitOne(0)) { RequestQuit("exit-signal"); return; }
+        AppDiagnostics.Heartbeat();
         CountdownNow = DateTimeOffset.Now;
         UpdateTrayIcon();
         if (_dock is null || _dock.IsDisposed)
         {
             _dock = new DockWindow(this);
+            AppDiagnostics.Event("dock-created", "ensure-resident-card");
             _dock.Show();
         }
         if (_lastDark != IsDark) Repaint();
@@ -178,12 +200,15 @@ internal sealed class TaskbarContext : IDisposable
             File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "运行状态.json"), JsonSerializer.Serialize(new
             {
                 Running = !_lifetime.IsCancellationRequested,
+                ProcessId = Environment.ProcessId,
+                StatusAt = DateTimeOffset.Now,
                 Refreshing = _refreshing,
                 AutoRefreshSeconds = 60,
                 DetailsVisible = _details?.IsVisible ?? false,
                 DetailsState = _details?.WindowState.ToString(),
                 DetailsBounds = _details is { IsVisible: true, WindowState: System.Windows.WindowState.Normal } detail && Native.GetWindowRect(new System.Windows.Interop.WindowInteropHelper(detail).Handle, out var detailsRect) ? new { detailsRect.Left, detailsRect.Top, Width = detailsRect.Right - detailsRect.Left, Height = detailsRect.Bottom - detailsRect.Top } : null,
                 TrayVisible = _tray.Visible,
+                DiagnosticsDirectory = AppDiagnostics.LogDirectory,
                 TrayIcon = "circle-gauge",
                 TrayIconDark = _trayIconDark,
                 TrayIconSize = _trayIconSize,
@@ -267,14 +292,17 @@ internal sealed class TaskbarContext : IDisposable
             }
         }
     }
+    internal void Quit() => RequestQuit("menu-exit");
     internal void PrepareForSystemShutdown(string reason)
     {
         if (_quitting) return;
+        AppDiagnostics.RequestStop("windows-session-" + reason);
         _quitting = true; _timer.Stop(); _lifetime.Cancel();
     }
-    internal async void Quit()
+    private async void RequestQuit(string reason)
     {
         if (_quitting) return;
+        AppDiagnostics.RequestStop(reason);
         _quitting = true;
         _timer.Stop();
         _lifetime.Cancel();

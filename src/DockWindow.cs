@@ -58,6 +58,7 @@ internal sealed class DockWindow : GlassWindow
         {
             e.Cancel = true;
             _context.DismissDetails();
+            AppDiagnostics.Event("dock-close-blocked", "resident-card-requires-explicit-exit");
         }
         base.OnClosing(e);
     }

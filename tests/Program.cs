@@ -81,3 +81,4 @@ popup = DetailsPlacement.Above(new(2000,1395,638,66),new(1920,0,2560,1392),new(6
 Check(popup.Left==2000 && popup.Bottom==1380 && popup.Width==615, "placement uses target-monitor physical pixels at higher DPI");
 popup = DetailsPlacement.Above(new(0,300,425,44),new(0,0,800,300),new(410,550),10,8);
 Check(popup.Top==8 && popup.Bottom==292, "short work areas constrain details instead of placing them offscreen");
+LifecycleChecks.Run();

@@ -2,6 +2,7 @@
 **/obj/
 dist/
 artifacts/
+logs/
 .vs/
 .idea/
 *.user

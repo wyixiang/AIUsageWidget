@@ -30,11 +30,12 @@ internal sealed class TaskbarLayerWatcher : IDisposable
             Interlocked.Exchange(ref pending,0);
             if(disposed || dispatcher.HasShutdownStarted) return;
             try { update(); }
-            catch(Exception) { }
+            catch(Exception error) { AppDiagnostics.Error("taskbar-layer-update",error); }
         })); }
-        catch(InvalidOperationException)
+        catch(InvalidOperationException error)
         {
             Interlocked.Exchange(ref pending,0);
+            if(!dispatcher.HasShutdownStarted) AppDiagnostics.Error("taskbar-layer-dispatch",error);
         }
     }
     public void Dispose()
