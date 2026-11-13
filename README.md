@@ -20,6 +20,7 @@ Windows 11 任务栏用量工具，在同一个显示条中查看 Codex 和 Curs
 - 支持固定位置和解锁拖动；任务栏隐藏或目标屏有全屏应用时隐藏显示条。
 - 最小化保留任务栏图标；关闭详情隐藏到系统托盘；右键菜单中的“退出”结束程序。
 - 重复启动会唤回已有窗口，不会创建多个实例。默认不添加开机自启。
+- 启动时检查继承的包身份和宿主进程组，必要时先独立重启，避免随开发工具更新或关闭一起退出。额度查询使用本机登录状态，不要求 Codex 桌面窗口保持开启。
 
 ## 环境要求
 
@@ -39,6 +40,8 @@ cd AIUsageWidget
 ```
 
 也可以双击 `dist` 中的 `启动.vbs`，或通过 `退出.vbs` 结束程序。首次启动只显示常驻卡片，点击卡片展开详情；需要启动时立即显示详情可运行 `AIUsageWidget.exe --details`。更新构建前，请先退出正在运行的工具，避免输出文件被占用。
+
+从开发工具启动时，会在取得单实例锁前检查 Windows 包身份和 Job 的退出约束，使用 Windows 的 [Desktop App Policy](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute) 与 [进程创建标志](https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags) 请求独立运行，并检查子进程确实没有包身份和 Job 绑定。宿主禁止脱离时会提示从资源管理器双击启动，避免循环重启或假装启动成功。
 
 构建为 framework-dependent 的 Windows x64 应用；仓库只包含源码，不提交个人运行目录。
 
@@ -90,6 +93,8 @@ Credit 是独立余额，不随每周套餐额度重置。没有返回的余额�
 | `session.json` | 当前进程、启动时间和最近心跳（约 30 秒更新） |
 | `last-exit.json` | 上次结束状态、退出原因、异常类型及堆栈 |
 
+`lifecycle.jsonl` 的 `launch-environment` 和 `运行状态.json` 的 `LaunchEnvironment` 记录实际包身份及 Job 状态。独立运行时 `PackageFullName` 为 `null`，`InJob` 为 `false`。启动隔离失败时，在程序旁的 `logs/launch-error.json` 保存错误类型和代码，不覆盖主实例会话。旧版本从打包的开发工具中启动时，Windows 可能把原日志重定向到该工具的包目录 `LocalCache/Local/AIUsageWidget/logs`；查找旧记录时应同时核对该位置。
+
 日志不保存异常消息、账号令牌、接口响应或额度。被强制终止或断电时可能无法当场写入退出原因，下次启动会标记上次未正常结束，原因未知时不会推测。`运行状态.json` 是最后一次快照，是否仍在运行应结合进程与心跳判断。
 
 仓库不包含上述文件、认证文件、浏览器会话、Cursor 数据库或构建产物。工具不向第三方服务上传使用数据。
@@ -98,9 +103,13 @@ Credit 是独立余额，不随每周套餐额度重置。没有返回的余额�
 
 ```powershell
 dotnet run --project tests/ParserChecks.csproj -c Release
+dotnet build tests/launch/LaunchIsolationChecks.csproj -c Release
+.\tests\launch\bin\Release\net8.0-windows\LaunchIsolationChecks.exe
 ```
 
 检查覆盖额度百分比转换、Credit 金额与钱包选择、周重置时间、缺失字段，以及显示器编号重排、唤醒重连等待和断开后的恢复逻辑。屏幕休眠与唤醒需要在实际硬件上进一步观察。
+
+启动检查使用临时宿主进程和两种带有退出约束的 Windows Job，验证宿主结束后独立进程仍然存活、参数原样传递且不会循环重启，不操作正在运行的小组件或 Codex。该检查需在构建后直接执行 EXE；`dotnet run` 自身附加的进程组可能禁止脱离，不能用于这项独立启动回归。
 
 ## 源码结构
 
@@ -115,6 +124,7 @@ src/
   DisplayCatalog.cs        Windows 显示器信息、系统主题
   MonitorSelection.cs      物理屏幕选择和重连逻辑
   Program.cs               生命周期、单实例、刷新和托盘
+  LaunchIsolation.cs       独立启动、包身份与宿主 Job 检查
 scripts/                   启动和退出入口
 tests/                     解析与显示器选择检查
 build.ps1                  构建入口
@@ -127,7 +137,7 @@ build.ps1                  构建入口
 - 更换显示接口或显卡驱动后，物理设备路径可能变化，可在“显示区域”中重新选择。
 - 旧版 Windows 原生小组件属于独立工程，不包含在此仓库。
 
-当前版本：**1.4.10**。修复窗口关闭时引用已关闭卡片的异常，增加启动与退出诊断。托盘图标改为额度仪表，随 Windows 任务栏明暗自动切换。详情在任务栏卡片上方展开，点击外部收起。任务栏、详情与悬停提示共用倒计时时钟，剩余 1 分钟内显示秒，超过 1 分钟按分钟向上取整。Windows 显示名称为“AI 用量”，程序文件为 `AIUsageWidget.exe`。任务栏用量条缩短四分之一；重置倒计时使用自然紧凑的 `4h51m` 加刷新图标的格式，按固定区域右对齐，无补齐空格。统一数字字体，细化用量条并留出行间距。
+当前版本：**1.4.11**。修复从开发工具启动时继承宿主环境、随宿主更新退出的问题，增加独立启动回归。修复窗口关闭时引用已关闭卡片的异常，增加启动与退出诊断。托盘图标改为额度仪表，随 Windows 任务栏明暗自动切换。详情在任务栏卡片上方展开，点击外部收起。任务栏、详情与悬停提示共用倒计时时钟，剩余 1 分钟内显示秒，超过 1 分钟按分钟向上取整。Windows 显示名称为“AI 用量”，程序文件为 `AIUsageWidget.exe`。任务栏用量条缩短四分之一；重置倒计时使用自然紧凑的 `4h51m` 加刷新图标的格式，按固定区域右对齐，无补齐空格。统一数字字体，细化用量条并留出行间距。
 
 ## 图标许可
 

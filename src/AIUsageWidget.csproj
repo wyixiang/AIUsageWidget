@@ -13,7 +13,7 @@
     <AssemblyTitle>AI 用量</AssemblyTitle>
     <Product>AI 用量</Product>
     <Description>Windows 11 Codex 与 Cursor 用量工具</Description>
-    <Version>1.4.10</Version>
+    <Version>1.4.11</Version>
     <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup><Compile Include="*.cs" /><Resource Include="app.ico" /><Resource Include="assets/icons/*.svg" /><None Include="../THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>

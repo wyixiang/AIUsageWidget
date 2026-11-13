@@ -21,6 +21,14 @@ internal static class Program
             catch (WaitHandleCannotBeOpenedException) { }
             return;
         }
+        try { if (LaunchIsolation.TryRelaunch(args)) return; }
+        catch (Exception error)
+        {
+            AppDiagnostics.LaunchFailure(error);
+            MessageBox.Show("无法脱离启动宿主独立运行。请从资源管理器双击 AIUsageWidget.exe 启动。\n错误类型：" + error.GetType().Name,
+                "AI 用量", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
         using var mutex = new Mutex(true, @"Local\CodexTaskbar.Personal", out var first);
         if (!first)
         {
@@ -209,6 +217,7 @@ internal sealed class TaskbarContext : IDisposable
                 DetailsBounds = _details is { IsVisible: true, WindowState: System.Windows.WindowState.Normal } detail && Native.GetWindowRect(new System.Windows.Interop.WindowInteropHelper(detail).Handle, out var detailsRect) ? new { detailsRect.Left, detailsRect.Top, Width = detailsRect.Right - detailsRect.Left, Height = detailsRect.Bottom - detailsRect.Top } : null,
                 TrayVisible = _tray.Visible,
                 DiagnosticsDirectory = AppDiagnostics.LogDirectory,
+                LaunchEnvironment = AppDiagnostics.EnvironmentInfo,
                 TrayIcon = "circle-gauge",
                 TrayIconDark = _trayIconDark,
                 TrayIconSize = _trayIconSize,
