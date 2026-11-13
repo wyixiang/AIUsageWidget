@@ -147,7 +147,7 @@ internal sealed class ModernMenu : GlassWindow
     internal ModernMenu(TaskbarContext context, DockWindow dock) : base(context.IsDark)
     {
         Title = "AI 用量快捷菜单";
-        ShowInTaskbar = context.InspectUi;
+        ShowInTaskbar = false;
         Width = 254; SizeToContent = W.SizeToContent.Height;
         var stack = new C.StackPanel { Margin = new W.Thickness(6) };
         Surface.Child = stack;

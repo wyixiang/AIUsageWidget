@@ -25,7 +25,7 @@ internal sealed class DockWindow : GlassWindow
     internal DockWindow(TaskbarContext context) : base(context.IsDark)
     {
         _context = context;
-        Title = "AI 用量 · 任务栏"; ShowActivated = false; ShowInTaskbar = context.InspectUi;
+        Title = "AI 用量 · 任务栏"; ShowActivated = false; ShowInTaskbar = false;
         Width = 425; Height = 44; Surface.CornerRadius = new W.CornerRadius(9);
         ToolTip = "剩余额度 · 单击查看详情 · 右键设置屏幕和位置";
         SourceInitialized += (_, _) => Native.SetWindowLongPtr(Handle,-20,new IntPtr(Native.GetWindowLongPtr(Handle,-20).ToInt64() | 0x08000000L));

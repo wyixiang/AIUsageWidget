@@ -17,9 +17,13 @@ internal sealed class DetailsWindow : GlassWindow
         _context = context;
         Title = "AI 用量";
         Width = 410; SizeToContent = W.SizeToContent.Height;
-        ShowInTaskbar = true; Topmost = false; ShowActivated = true; ResizeMode = W.ResizeMode.CanMinimize;
+        ShowInTaskbar = false; Topmost = false; ShowActivated = true; ResizeMode = W.ResizeMode.CanMinimize;
         IsVisibleChanged += (_, _) => context.WriteStatus();
-        StateChanged += (_, _) => context.WriteStatus();
+        StateChanged += (_, _) =>
+        {
+            if (WindowState == W.WindowState.Minimized) Dismiss();
+            context.WriteStatus();
+        };
         Deactivated += (_, _) => Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, new Action(() =>
         {
             // Deactivation may precede minimization; wait for the final window state.
@@ -40,7 +44,7 @@ internal sealed class DetailsWindow : GlassWindow
             return button;
         }
         var captions = new C.StackPanel { Orientation = C.Orientation.Horizontal, HorizontalAlignment = W.HorizontalAlignment.Right };
-        captions.Children.Add(Caption("最小化", "\uE921", () => WindowState = W.WindowState.Minimized));
+        captions.Children.Add(Caption("最小化到系统托盘", "\uE921", Dismiss));
         captions.Children.Add(Caption("关闭到系统托盘", "\uE8BB", Dismiss));
         header.Children.Add(captions);
         Closing += (_, e) => { if (!context.IsQuitting && !_closeForTheme) { e.Cancel = true; Dismiss(); } };
