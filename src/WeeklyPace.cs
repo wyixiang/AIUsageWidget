@@ -12,7 +12,7 @@ internal sealed record WeeklyPace(double ExpectedUsedPercent, double ExpectedRem
         Difference < 0 ? $"比预期少用 {-Difference:0.#} 个百分点" : "消耗与预期相当";
     internal string Description => $"工作日预期已用 {ExpectedUsedPercent:0.#}%（应剩 {ExpectedRemainingPercent:0.#}%）\n{Comparison} · 剩余 {RemainingWorkdays:0.##} 个工作日"
         + (TotalWorkdays == 0 ? "\n本周期全休" : "") + CalendarNote;
-    internal string Tooltip => $"{Description}\n实际已用 {ActualUsedPercent:0.#}%\n竖线表示预期剩余额度。放假暂停，补班照常计入。";
+    internal string Tooltip => $"{Description}\n实际已用 {ActualUsedPercent:0.#}%\n橙红色竖线表示预期剩余额度。放假暂停，补班照常计入。";
 
     internal static WeeklyPace? Evaluate(UsageWindow window, DateTimeOffset now, TimeZoneInfo? zone = null, ChinaWorkCalendar? calendar = null)
     {
