@@ -92,6 +92,12 @@ internal sealed class DetailsWindow : GlassWindow
     }
     internal void UpdateValues()
     {
+        var settings = _context.Settings;
+        _codexTab.Visibility = settings.ShowCodex ? W.Visibility.Visible : W.Visibility.Collapsed;
+        _cursorTab.Visibility = settings.ShowCursor ? W.Visibility.Visible : W.Visibility.Collapsed;
+        C.Grid.SetColumnSpan(_codexTab, settings.ShowCursor ? 1 : 2);
+        C.Grid.SetColumn(_cursorTab, settings.ShowCodex ? 1 : 0);
+        C.Grid.SetColumnSpan(_cursorTab, settings.ShowCodex ? 1 : 2);
         _codexTab.Background = _context.CursorDetails ? System.Windows.Media.Brushes.Transparent : Colors.Hover;
         _cursorTab.Background = _context.CursorDetails ? Colors.Hover : System.Windows.Media.Brushes.Transparent;
         _resetTimes.Clear(); _body.Children.Clear();
@@ -122,10 +128,17 @@ internal sealed class DetailsWindow : GlassWindow
         if (_context.CursorDetails)
         {
             var credit = new C.StackPanel { Margin = new W.Thickness(15, 12, 15, 12) };
-            credit.Children.Add(new C.TextBlock { Text = "Credit 余额", FontSize = 13, Foreground = Colors.Muted });
             credit.Children.Add(new C.TextBlock { Text = snapshot.Credits ?? "暂不可用", FontFamily = new System.Windows.Media.FontFamily("Segoe UI"), FontSize = 28, FontWeight = W.FontWeights.SemiBold, Foreground = Colors.Text, Margin = new W.Thickness(0, 4, 0, 8) });
             credit.Children.Add(new C.TextBlock { Text = "独立余额 · 不随每周额度重置", FontSize = 12, Foreground = Colors.Muted });
-            _body.Children.Add(new C.Border { Background = Colors.Card, BorderBrush = Colors.Stroke, BorderThickness = new W.Thickness(1), CornerRadius = new W.CornerRadius(8), Margin = new W.Thickness(0, 4, 0, 4), Child = credit });
+            var creditPanel = new C.Expander
+            {
+                Header = "Credit 余额", IsExpanded = settings.ShowCursorCredit,
+                Foreground = Colors.Text, FontSize = 13,
+                Content = credit, Padding = new W.Thickness(10, 6, 10, 6)
+            };
+            creditPanel.Expanded += (_, _) => _context.SetCreditVisible(true, updateDetails: false);
+            creditPanel.Collapsed += (_, _) => _context.SetCreditVisible(false, updateDetails: false);
+            _body.Children.Add(new C.Border { Background = Colors.Card, BorderBrush = Colors.Stroke, BorderThickness = new W.Thickness(1), CornerRadius = new W.CornerRadius(8), Margin = new W.Thickness(0, 4, 0, 4), Child = creditPanel });
         }
         var status = $"更新于 {snapshot.FetchedAt:HH:mm:ss} · 每 1 分钟刷新";
 

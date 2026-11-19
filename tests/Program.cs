@@ -82,3 +82,4 @@ Check(popup.Left==2000 && popup.Bottom==1380 && popup.Width==615, "placement use
 popup = DetailsPlacement.Above(new(0,300,425,44),new(0,0,800,300),new(410,550),10,8);
 Check(popup.Top==8 && popup.Bottom==292, "short work areas constrain details instead of placing them offscreen");
 LifecycleChecks.Run();
+TaskbarLayoutChecks.Run();

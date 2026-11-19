@@ -10,12 +10,15 @@ internal sealed class DockWindow : GlassWindow
 {
     private readonly TaskbarContext _context;
     private readonly List<QuotaMeter> _meters = new();
+    private readonly List<(W.FrameworkElement Element, bool Cursor)> _platformRegions = new();
+    private TaskbarLayout _layout = TaskbarLayout.Create(true, true, false, 1);
     private Point? _press;
     private int _startOffset;
     private bool _dragged;
     private ModernMenu? _menu;
     private readonly MonitorSelection _monitorSelection = new();
     internal bool Attached { get; private set; }
+    internal string LayoutMode => !_layout.HasContent ? "Hidden" : _layout.IsHorizontal ? "Horizontal" : "Stacked";
     internal string? MonitorDevice { get; private set; }
     internal string? MonitorIdentity { get; private set; }
     internal void PrepareForReconnect() => _monitorSelection.BeginReconnect(DateTimeOffset.UtcNow);
@@ -44,7 +47,7 @@ internal sealed class DockWindow : GlassWindow
         {
             if (!_press.HasValue) return;
             _press = null; ReleaseMouseCapture(); e.Handled = true;
-            if (_dragged) context.Settings.Save(); else { context.CursorDetails = e.GetPosition(this).Y >= ActualHeight / 2; context.ShowDetails(); }
+            if (_dragged) context.Settings.Save(); else { context.CursorDetails = PlatformAt(e.GetPosition(Surface.Child)); context.ShowDetails(); }
         };
         LostMouseCapture += (_, _) => _press = null;
         MouseRightButtonUp += (_, e) => { ShowModernMenu(); e.Handled = true; };
@@ -65,53 +68,154 @@ internal sealed class DockWindow : GlassWindow
     internal void Invalidate()
     {
         _meters.Clear();
+        _platformRegions.Clear();
+        var settings = _context.Settings;
+        _layout = TaskbarLayout.Create(settings.ShowCodex, settings.ShowCursor, settings.ShowCursorCredit, _context.Snapshot?.Windows.Length ?? 0, settings.HorizontalWidthLimit);
+        Width = Math.Max(1, _layout.Width);
         var dark = _context.IsDark; UpdateBackdrop(dark); var p = new Palette(dark);
         Surface.Background = Palette.Brush(dark ? "#C8262C33" : "#C8F8FAFC"); Surface.BorderBrush = p.Stroke;
-        var grid = new C.Grid { Margin = new W.Thickness(10, 0, 10, 0), Cursor = I.Cursors.Hand };
-        grid.RowDefinitions.Add(new C.RowDefinition()); grid.RowDefinitions.Add(new C.RowDefinition());
-        foreach(var width in new[]{new W.GridLength(108),new W.GridLength(1,W.GridUnitType.Star),new W.GridLength(10),new W.GridLength(1,W.GridUnitType.Star)}) grid.ColumnDefinitions.Add(new C.ColumnDefinition { Width = width });
-        void Row(int row, string label, CodexBoardWidget.UsageSnapshot? snapshot, string? error, bool cursor)
+        if (!_layout.IsHorizontal)
         {
-            var brand = new C.StackPanel { Orientation = C.Orientation.Horizontal, VerticalAlignment = W.VerticalAlignment.Center };
-            brand.Children.Add(ProductIcons.Create(cursor, p.Muted));
-            brand.Children.Add(new C.TextBlock { Text = label, FontFamily = new M.FontFamily("Segoe UI"), FontSize = 12, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text, Margin = new W.Thickness(6,0,0,0) });
-            if (!string.IsNullOrWhiteSpace(snapshot?.Plan)) brand.Children.Add(new C.TextBlock { Text = UsageLabels.Plan(snapshot.Plan), FontFamily = new M.FontFamily("Segoe UI"), FontSize = 11, Foreground = p.Muted, Margin = new W.Thickness(5, 1, 0, 0), VerticalAlignment = W.VerticalAlignment.Center });
-            C.Grid.SetRow(brand,row); grid.Children.Add(brand);
+            Surface.Child = StackedContent(p);
+            ToolTip = Summary();
+            return;
+        }
+        var grid = new C.Grid { Margin = new W.Thickness(11, 2, 11, 2), Cursor = I.Cursors.Hand };
+        void Section(W.FrameworkElement element, double width, bool cursor)
+        {
+            if (grid.ColumnDefinitions.Count > 0)
+            {
+                grid.ColumnDefinitions.Add(new C.ColumnDefinition { Width = new W.GridLength(TaskbarLayout.SectionGap) });
+                var divider = new C.Border { Width = 1, Height = 25, Background = p.Stroke, VerticalAlignment = W.VerticalAlignment.Center };
+                C.Grid.SetColumn(divider, grid.ColumnDefinitions.Count - 1); grid.Children.Add(divider);
+            }
+            grid.ColumnDefinitions.Add(new C.ColumnDefinition { Width = new W.GridLength(width) });
+            C.Grid.SetColumn(element, grid.ColumnDefinitions.Count - 1); grid.Children.Add(element);
+            _platformRegions.Add((element, cursor));
+        }
+        void Platform(string label, CodexBoardWidget.UsageSnapshot? snapshot, string? error, bool cursor)
+        {
+            var section = new C.Grid();
+            section.ColumnDefinitions.Add(new C.ColumnDefinition { Width = new W.GridLength(TaskbarLayout.BrandWidth) });
+            var brand = new C.Grid { Margin = new W.Thickness(0, 0, 10, 0), VerticalAlignment = W.VerticalAlignment.Center };
+            brand.ColumnDefinitions.Add(new C.ColumnDefinition { Width = new W.GridLength(24) });
+            brand.ColumnDefinitions.Add(new C.ColumnDefinition());
+            var symbol = ProductIcons.Create(cursor, p.Accent); symbol.Width = symbol.Height = 18;
+            brand.Children.Add(symbol);
+            var identity = new C.StackPanel { VerticalAlignment = W.VerticalAlignment.Center };
+            identity.Children.Add(new C.TextBlock { Text = label, FontFamily = new M.FontFamily("Segoe UI"), FontSize = 12, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text });
+            identity.Children.Add(new C.TextBlock { Text = snapshot?.Plan is { } plan ? UsageLabels.Plan(plan) : "—", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 10.5, Foreground = p.Muted, TextTrimming = W.TextTrimming.CharacterEllipsis });
+            C.Grid.SetColumn(identity, 1); brand.Children.Add(identity); section.Children.Add(brand);
             var windows = snapshot?.Windows.Take(cursor ? 1 : 2).ToArray();
             if(windows is { Length: >0 })
             {
                 for(var index=0;index<windows.Length;index++)
                 {
+                    if (index > 0) section.ColumnDefinitions.Add(new C.ColumnDefinition { Width = new W.GridLength(TaskbarLayout.MeterGap) });
+                    section.ColumnDefinitions.Add(new C.ColumnDefinition { Width = new W.GridLength(TaskbarLayout.MeterWidth) });
                     var quota = windows[index];
-                    var name = cursor ? quota.Duration==10080 ? "Wk" : "Plan" : quota.Duration==300 ? "5h" : "Wk";
+                    var name = MeterLabel(cursor, quota);
                     var meter = new QuotaMeter(name, quota, p, _context.CountdownNow);
                     _meters.Add(meter);
-                    C.Grid.SetRow(meter,row); C.Grid.SetColumn(meter,index==0?1:3); grid.Children.Add(meter);
+                    C.Grid.SetColumn(meter, section.ColumnDefinitions.Count - 1); section.Children.Add(meter);
                 }
             }
             else
             {
-                var message = new C.TextBlock { Text = error is null ? "Loading…" : "Unavailable", FontSize = 11, Foreground = p.Muted, VerticalAlignment = W.VerticalAlignment.Center };
-                C.Grid.SetRow(message,row); C.Grid.SetColumn(message,1); C.Grid.SetColumnSpan(message,3); grid.Children.Add(message);
+                section.ColumnDefinitions.Add(new C.ColumnDefinition { Width = new W.GridLength(TaskbarLayout.MeterWidth) });
+                var message = new C.TextBlock { Text = error is not null ? "Unavailable" : snapshot is null ? "Loading…" : "—", FontSize = 11, Foreground = p.Muted, VerticalAlignment = W.VerticalAlignment.Center };
+                C.Grid.SetColumn(message, 1); section.Children.Add(message);
+            }
+            section.ToolTip = UsageLabels.Summary(label, snapshot, _context.CountdownNow, settings.ShowCursorCredit);
+            Section(section, cursor ? _layout.CursorWidth : _layout.CodexWidth, cursor);
+        }
+        if (_layout.Codex) Platform("Codex", _context.Snapshot, _context.Error, false);
+        if (_layout.Cursor) Platform("Cursor", _context.CursorSnapshot, _context.CursorError, true);
+        if (_layout.Credit)
+        {
+            var credit = new C.StackPanel { VerticalAlignment = W.VerticalAlignment.Center, ToolTip = "Cursor Credit · 独立余额" };
+            credit.Children.Add(new C.TextBlock { Text = "Credit", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 11, Foreground = p.Muted });
+            credit.Children.Add(new C.TextBlock { Text = _context.CursorSnapshot?.Credits ?? "—", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 18, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text, TextTrimming = W.TextTrimming.CharacterEllipsis });
+            Section(credit, TaskbarLayout.CreditWidth, true);
+        }
+        ToolTip = Summary();
+        Surface.Child = grid;
+    }
+    private static string MeterLabel(bool cursor, CodexBoardWidget.UsageWindow quota)
+        => cursor ? quota.Duration == 10080 ? "Wk" : "Plan" : quota.Duration == 300 ? "5h" : "Wk";
+    private C.Grid StackedContent(Palette p)
+    {
+        var grid = new C.Grid { Margin = new W.Thickness(11, 0, 11, 0), Cursor = I.Cursors.Hand };
+        void Row(bool cursor)
+        {
+            var row = grid.RowDefinitions.Count;
+            grid.RowDefinitions.Add(new C.RowDefinition());
+            var section = new C.Grid();
+            section.ColumnDefinitions.Add(new C.ColumnDefinition { Width = new W.GridLength(TaskbarLayout.CompactBrandWidth) });
+            for (var column = 0; column < _layout.StackedColumns; column++)
+            {
+                if (column > 0) section.ColumnDefinitions.Add(new C.ColumnDefinition { Width = new W.GridLength(TaskbarLayout.CompactMeterGap) });
+                section.ColumnDefinitions.Add(new C.ColumnDefinition { Width = new W.GridLength(TaskbarLayout.CompactMeterWidth) });
+            }
+            C.Grid.SetRow(section, row); grid.Children.Add(section); _platformRegions.Add((section, cursor));
+            var snapshot = cursor ? _context.CursorSnapshot : _context.Snapshot;
+            var error = cursor ? _context.CursorError : _context.Error;
+            var brand = new C.Grid { Margin = new W.Thickness(0, 0, 6, 0), VerticalAlignment = W.VerticalAlignment.Center };
+            foreach (var width in new[] { new W.GridLength(22), new W.GridLength(40), new W.GridLength(1, W.GridUnitType.Star) })
+                brand.ColumnDefinitions.Add(new C.ColumnDefinition { Width = width });
+            brand.Children.Add(ProductIcons.Create(cursor, p.Muted));
+            var name = new C.TextBlock { Text = cursor ? "Cursor" : "Codex", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 12, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text };
+            C.Grid.SetColumn(name, 1); brand.Children.Add(name);
+            var plan = new C.TextBlock { Text = snapshot?.Plan is { } value ? UsageLabels.Plan(value) : "—", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 10.5, Foreground = p.Muted, TextTrimming = W.TextTrimming.CharacterEllipsis, VerticalAlignment = W.VerticalAlignment.Center };
+            C.Grid.SetColumn(plan, 2); brand.Children.Add(plan); section.Children.Add(brand);
+            var windows = snapshot?.Windows.Take(cursor ? 1 : 2).ToArray();
+            if (windows is { Length: > 0 })
+            {
+                for (var index = 0; index < windows.Length; index++)
+                {
+                    var meter = new QuotaMeter(MeterLabel(cursor, windows[index]), windows[index], p, _context.CountdownNow, compact: true);
+                    _meters.Add(meter); C.Grid.SetColumn(meter, index == 0 ? 1 : 3); section.Children.Add(meter);
+                }
+            }
+            else
+            {
+                var message = new C.TextBlock { Text = error is not null ? "Unavailable" : snapshot is null ? "Loading…" : "—", FontSize = 11, Foreground = p.Muted, VerticalAlignment = W.VerticalAlignment.Center };
+                C.Grid.SetColumn(message, 1); section.Children.Add(message);
+            }
+            if (cursor && _layout.Credit)
+            {
+                var credit = new C.Grid { Height = 20, VerticalAlignment = W.VerticalAlignment.Center };
+                credit.Children.Add(new C.TextBlock { Text = "Credit", FontSize = 11, Foreground = p.Muted, VerticalAlignment = W.VerticalAlignment.Center });
+                credit.Children.Add(new C.TextBlock { Text = snapshot?.Credits ?? "—", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 13, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text, HorizontalAlignment = W.HorizontalAlignment.Right, VerticalAlignment = W.VerticalAlignment.Center });
+                C.Grid.SetColumn(credit, 3); section.Children.Add(credit);
             }
         }
-        Row(0,"Codex",_context.Snapshot,_context.Error,false);
-        Row(1,"Cursor",_context.CursorSnapshot,_context.CursorError,true);
-        ToolTip = _context.Error is not null || _context.CursorError is not null ? "部分额度未更新。点击详情切换 Codex / Cursor 查看状态。" : "剩余额度 · 单击详情 · 右键设置屏幕和位置";
-        if (_context.CursorSnapshot is { } cursorSnapshot)
+        if (_layout.Codex) Row(false);
+        if (_layout.Cursor) Row(true);
+        return grid;
+    }
+    private bool PlatformAt(W.Point point)
+    {
+        foreach (var (element, cursor) in _platformRegions)
         {
-            var creditLine = new C.Grid { Height=18, VerticalAlignment = W.VerticalAlignment.Top };
-            creditLine.Children.Add(new C.TextBlock { Text = "Credit", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 11, Foreground = p.Muted, VerticalAlignment = W.VerticalAlignment.Center });
-            creditLine.Children.Add(new C.TextBlock { Text = cursorSnapshot.Credits ?? "—", FontFamily = new M.FontFamily("Segoe UI"), FontSize = 13, FontWeight = W.FontWeights.SemiBold, Foreground = p.Text, HorizontalAlignment=W.HorizontalAlignment.Right, VerticalAlignment=W.VerticalAlignment.Center });
-            C.Grid.SetRow(creditLine, 1); C.Grid.SetColumn(creditLine, 3); grid.Children.Add(creditLine);
+            var origin = element.TransformToAncestor((M.Visual)Surface.Child).Transform(new W.Point());
+            if (new W.Rect(origin, element.RenderSize).Contains(point)) return cursor;
         }
-        ToolTip = UsageLabels.Summary("Codex", _context.Snapshot, _context.CountdownNow) + "\n\n" + UsageLabels.Summary("Cursor", _context.CursorSnapshot, _context.CountdownNow);
-        Surface.Child = grid;
+        return !_context.Settings.ShowCodex;
+    }
+    private string Summary()
+    {
+        var summaries = new List<string>();
+        if (_context.Settings.ShowCodex) summaries.Add(UsageLabels.Summary("Codex", _context.Snapshot, _context.CountdownNow));
+        if (_context.Settings.ShowCursor) summaries.Add(UsageLabels.Summary("Cursor", _context.CursorSnapshot, _context.CountdownNow, _context.Settings.ShowCursorCredit));
+        return string.Join("\n\n", summaries);
     }
     internal void UpdateCountdowns()
     {
         foreach(var meter in _meters) meter.UpdateCountdown(_context.CountdownNow);
-        var summary = UsageLabels.Summary("Codex", _context.Snapshot, _context.CountdownNow) + "\n\n" + UsageLabels.Summary("Cursor", _context.CursorSnapshot, _context.CountdownNow);
+        foreach (var (element, cursor) in _platformRegions)
+            element.ToolTip = UsageLabels.Summary(cursor ? "Cursor" : "Codex", cursor ? _context.CursorSnapshot : _context.Snapshot, _context.CountdownNow, _context.Settings.ShowCursorCredit);
+        var summary = Summary();
         if (!Equals(ToolTip, summary)) ToolTip = summary;
     }
     internal void ShowModernMenu()
@@ -123,6 +227,7 @@ internal sealed class DockWindow : GlassWindow
     internal void DockToTaskbar()
     {
         if (IsDisposed || IsClosing || _context.IsQuitting) return;
+        if (!_layout.HasContent) { Hide(); Attached = false; return; }
         var displays=DisplayCatalog.Read();
         var candidates=displays.Select(d=>new MonitorCandidate(d.DeviceName,d.Identity,d.Screen.Primary)).ToArray();
         var choice=_monitorSelection.Resolve(candidates,_context.Settings.MonitorIdentity,_context.Settings.MonitorDevice,DateTimeOffset.UtcNow);
@@ -142,7 +247,7 @@ internal sealed class DockWindow : GlassWindow
         var taskbar=Native.Taskbars().FirstOrDefault(h=>Screen.FromHandle(h).DeviceName==selected.DeviceName);
         if(taskbar==IntPtr.Zero || !Native.GetWindowRect(taskbar,out var r)) { Hide(); Attached=false; return; }
         var scale=Math.Max(96,Native.GetDpiForWindow(taskbar))/96.0;
-        var height=Math.Min((int)Math.Round(44*scale),Math.Max(24,r.Bottom-r.Top-4)); var width=(int)Math.Round(425*scale);
+        var height=Math.Min((int)Math.Round(44*scale),Math.Max(24,r.Bottom-r.Top-4)); var width=(int)Math.Round(Width*scale);
         var x=Math.Clamp((int)((r.Right-r.Left)*_context.Settings.LeftFraction+_context.Settings.Offset*scale),8,Math.Max(8,r.Right-r.Left-width-(int)Math.Round(96*scale))); var y=(r.Bottom-r.Top-height)/2;
         var screen=selected.Bounds;
         if(r.Top>=screen.Bottom-3 || r.Bottom<=screen.Top+3 || Native.IsFullscreenForeground(screen,Handle)) { Hide(); return; }

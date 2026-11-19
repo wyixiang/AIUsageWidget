@@ -73,6 +73,10 @@ internal sealed class Preferences
     public int Offset { get; set; } = 4;
     public bool Locked { get; set; } = true;
     public string Theme { get; set; } = "system";
+    public bool ShowCodex { get; set; } = true;
+    public bool ShowCursor { get; set; } = true;
+    public bool ShowCursorCredit { get; set; }
+    public int HorizontalWidthLimit { get; set; } = 520;
     public string? MonitorDevice { get; set; }
     public string? MonitorIdentity { get; set; }
     internal static string FilePath => Path.Combine(AppContext.BaseDirectory, "preferences.json");
@@ -164,7 +168,7 @@ internal sealed class TaskbarContext : IDisposable
         {
             _dock = new DockWindow(this);
             AppDiagnostics.Event("dock-created", "ensure-resident-card");
-            _dock.Show();
+            if (Settings.ShowCodex || Settings.ShowCursor) _dock.Show();
         }
         if (_lastDark != IsDark) Repaint();
         _dock.DockToTaskbar();
@@ -223,6 +227,7 @@ internal sealed class TaskbarContext : IDisposable
                 TrayIconSize = _trayIconSize,
                 AnchoredToTaskbar = _dock is { IsDisposed: false } && _dock.Attached,
                 DisplayMode = "Taskbar-aligned independent window",
+                DisplayContent = new { Settings.ShowCodex, Settings.ShowCursor, Settings.ShowCursorCredit, Settings.HorizontalWidthLimit, Layout = _dock?.LayoutMode },
                 MonitorDevice = _dock?.MonitorDevice,
                 MonitorIdentity = _dock?.MonitorIdentity,
                 PreferredMonitorIdentity = Settings.MonitorIdentity,
@@ -246,6 +251,9 @@ internal sealed class TaskbarContext : IDisposable
     }
     internal void ShowDetails()
     {
+        if (!Settings.ShowCodex && !Settings.ShowCursor) { _dock?.ShowModernMenu(); return; }
+        if (!Settings.ShowCodex) CursorDetails = true;
+        else if (!Settings.ShowCursor) CursorDetails = false;
         if (_details is null || _details.IsDisposed) _details = new DetailsWindow(this);
         System.Windows.Application.Current.MainWindow = _details;
 
@@ -278,6 +286,32 @@ internal sealed class TaskbarContext : IDisposable
         details.PositionAbove(bounds, Screen.FromRectangle(bounds).WorkingArea, scale);
     }
     internal void DismissDetails() { if (_details is { IsDisposed: false }) _details.Dismiss(); }
+    internal void SetPlatformVisible(bool cursor, bool visible)
+    {
+        if (cursor) Settings.ShowCursor = visible; else Settings.ShowCodex = visible;
+        ApplyDisplaySettings();
+    }
+    internal void SetCreditVisible(bool visible, bool updateDetails = true)
+    {
+        if (Settings.ShowCursorCredit == visible) return;
+        Settings.ShowCursorCredit = visible;
+        ApplyDisplaySettings(updateDetails);
+    }
+    internal void SetLayoutLimit(int width)
+    {
+        Settings.HorizontalWidthLimit = Math.Clamp(width, 300, 900);
+        ApplyDisplaySettings();
+    }
+    private void ApplyDisplaySettings(bool updateDetails = true)
+    {
+        Settings.Save();
+        if (!Settings.ShowCodex) CursorDetails = true;
+        else if (!Settings.ShowCursor) CursorDetails = false;
+        if (!Settings.ShowCodex && !Settings.ShowCursor) DismissDetails();
+        _dock?.Invalidate(); _dock?.DockToTaskbar();
+        if (updateDetails && _details is { IsDisposed: false }) _details.UpdateValues();
+        PositionDetails(); WriteStatus();
+    }
     internal void RestoreDockLayer()
     {
         if (_quitting || _dock is not { IsDisposed: false, IsClosing: false } dock) return;

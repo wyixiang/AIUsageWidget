@@ -198,9 +198,22 @@ internal sealed class ModernMenu : GlassWindow
         void Child(C.StackPanel items, string label, string icon, Action action, bool selected)
             => items.Children.Add(Button(label, Colors, () => { HideSubmenu(); Close(); action(); }, icon, selected));
         Item("刷新额度", "\uE72C", () => _ = context.RefreshAsync());
-        Item("查看 Codex 额度", "\uE946", () => { context.CursorDetails = false; context.ShowDetails(); });
-        Item("查看 Cursor 额度", "\uE8B0", () => { context.CursorDetails = true; context.ShowDetails(); });
+        if (context.Settings.ShowCodex) Item("查看 Codex 额度", "\uE946", () => { context.CursorDetails = false; context.ShowDetails(); });
+        if (context.Settings.ShowCursor) Item("查看 Cursor 额度", "\uE8B0", () => { context.CursorDetails = true; context.ShowDetails(); });
         Separator();
+        Parent("显示内容", "\uE713", items =>
+        {
+            Child(items, "Codex", "\uE945", () => context.SetPlatformVisible(false, !context.Settings.ShowCodex), context.Settings.ShowCodex);
+            Child(items, "Cursor", "\uE8B0", () => context.SetPlatformVisible(true, !context.Settings.ShowCursor), context.Settings.ShowCursor);
+            Child(items, "Cursor Credit", "\uE8C7", () => context.SetCreditVisible(!context.Settings.ShowCursorCredit), context.Settings.ShowCursorCredit);
+        }, 216);
+        Parent("布局宽度", "\uE7F4", items =>
+        {
+            items.Children.Add(new C.TextBlock { Text = "过宽时自动上下叠放", FontSize = 11, Foreground = Colors.Muted, Margin = new W.Thickness(10, 4, 10, 6) });
+            Child(items, "紧凑", "\uE8A4", () => context.SetLayoutLimit(440), context.Settings.HorizontalWidthLimit == 440);
+            Child(items, "标准", "\uE8A4", () => context.SetLayoutLimit(520), context.Settings.HorizontalWidthLimit == 520);
+            Child(items, "宽松", "\uE8A4", () => context.SetLayoutLimit(640), context.Settings.HorizontalWidthLimit == 640);
+        }, 216);
         Item("固定位置", "\uE718", () => { context.Settings.Locked = !context.Settings.Locked; context.Settings.Save(); }, context.Settings.Locked);
         Parent("颜色", "\uE790", items =>
         {
@@ -228,7 +241,7 @@ internal sealed class ModernMenu : GlassWindow
         Closed += (_, _) => _closeDelay.Stop();
         ContentRendered += (_, _) =>
         {
-            var bounds = dock.Bounds;
+            var bounds = dock.Visible ? dock.Bounds : new Rectangle(System.Windows.Forms.Cursor.Position, new Size(1, 1));
             var scale = Math.Max(1, Native.GetDpiForWindow(dock.Handle)) / 96.0;
             var screen = Screen.FromRectangle(bounds).WorkingArea;
             Left = Math.Clamp(bounds.Left / scale, screen.Left / scale + 6, screen.Right / scale - Width - 6);
