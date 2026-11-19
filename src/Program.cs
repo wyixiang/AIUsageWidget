@@ -162,6 +162,7 @@ internal sealed class TaskbarContext : IDisposable
     {
         if (_exitSignal.WaitOne(0)) { RequestQuit("exit-signal"); return; }
         AppDiagnostics.Heartbeat();
+        _ = AppleHolidayFeed.RefreshIfDueAsync(_lifetime.Token);
         CountdownNow = DateTimeOffset.Now;
         UpdateTrayIcon();
         if (_dock is null || _dock.IsDisposed)

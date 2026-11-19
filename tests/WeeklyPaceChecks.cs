@@ -31,6 +31,46 @@ internal static class WeeklyPaceChecks
         Check(Near(WeeklyPace.Evaluate(Window(At(21)), At(15, 12), zone)!.ExpectedUsedPercent, 0), "a weekend reset keeps the new cycle budget untouched until Monday");
         var summary = UsageLabels.Summary("Cursor", new([Window(DateTimeOffset.Now.AddDays(2))], "super", null, DateTimeOffset.Now), DateTimeOffset.Now);
         Check(summary.Contains("工作日预期") && summary.Contains("应剩"), "hover summary explains the marker using remaining-quota semantics");
+        CheckHolidaySchedule(zone);
+    }
+    private static void CheckHolidaySchedule(TimeZoneInfo zone)
+    {
+        const string source = """
+            BEGIN:VCALENDAR
+            BEGIN:VEVENT
+            DTSTART;VALUE=DATE:20261001
+            DTEND;VALUE=DATE:20261008
+            X-APPLE-SPECIAL-DAY:WORK-HOLIDAY
+            END:VEVENT
+            BEGIN:VEVENT
+            DTSTART;VALUE=DATE:20261010
+            X-APPLE-SPECIAL-DAY:ALTERNATE-
+             WORKDAY
+            END:VEVENT
+            BEGIN:VEVENT
+            DTSTART;VALUE=DATE:20270101
+            SUMMARY:元旦
+            END:VEVENT
+            END:VCALENDAR
+            """;
+        var calendar = ChinaWorkCalendar.Parse(source);
+        Check(calendar.HasSchedule(2026) && !calendar.HasSchedule(2027), "ordinary holiday names do not establish published work schedules");
+        Check(!calendar.IsWorkday(new(2026, 10, 7)) && calendar.IsWorkday(new(2026, 10, 8)), "Apple all-day holiday ranges exclude DTEND");
+        Check(calendar.IsWorkday(new(2026, 10, 10)) && !calendar.IsWorkday(new(2026, 10, 11)), "folded workday field identifies a single Saturday make-up shift");
+        WeeklyPace Period(DateTimeOffset reset, DateTimeOffset now) =>
+            WeeklyPace.Evaluate(new("周", 60, reset.ToUnixTimeSeconds(), 10080), now, zone, calendar)!;
+        DateTimeOffset At(int month, int day, int hour = 0, int year = 2026) => new(year, month, day, hour, 0, 0, TimeSpan.FromHours(8));
+        var allOff = Period(At(10, 8), At(10, 5, 12));
+        Check(allOff.TotalWorkdays == 0 && allOff.ExpectedUsedPercent == 0 && allOff.Description.Contains("全休"), "entire holiday cycle has zero planned spend and a finite remaining marker");
+        var holiday = Period(At(10, 12), At(10, 7, 12));
+        var makeup = Period(At(10, 12), At(10, 10, 12));
+        Check(holiday.TotalWorkdays == 3 && holiday.ExpectedUsedPercent == 0 && Near(makeup.ExpectedUsedPercent, 250d / 3), "weekly budget pauses on holidays and advances through a partial make-up Saturday");
+        var next = Period(At(1, 4, year: 2027), At(1, 1, 12, 2027));
+        Check(next.TotalWorkdays == 5 && Near(next.ExpectedUsedPercent, 90) && next.CalendarNote.Contains("2027") && !next.CalendarNote.Contains("2026"),
+            "cross-year cycle estimates only the unpublished year and counts an unclassified Friday");
+        Check(Period(At(1, 1, year: 2027), At(12, 30)).CalendarNote == "", "reset at midnight excludes the next year from the coverage note");
+        try { ChinaWorkCalendar.Parse(source.Replace("END:VCALENDAR", "")); throw new Exception("Truncated calendar accepted"); }
+        catch (InvalidDataException) { Console.WriteLine("PASS: truncated response is rejected before replacing the previous calendar"); }
     }
     private static bool Near(double actual, double expected) => Math.Abs(actual - expected) < 0.000001;
     private static void Check(bool passed, string message)
