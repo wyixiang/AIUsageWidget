@@ -41,7 +41,11 @@ internal static class UsageLabels
     {
         if(snapshot is null) return provider+" · 正在读取";
         var lines=new List<string> { provider+" · "+Plan(snapshot.Plan) };
-        foreach(var window in snapshot.Windows) lines.Add($"{window.Name}：剩余 {window.Remaining:0.#}%\n{Reset(window.ResetsAt, window.Duration, now)}");
+        foreach(var window in snapshot.Windows)
+        {
+            lines.Add($"{window.Name}：剩余 {window.Remaining:0.#}%\n{Reset(window.ResetsAt, window.Duration, now)}");
+            if(WeeklyPace.Evaluate(window,now ?? DateTimeOffset.Now) is { } pace) lines.Add(pace.Description);
+        }
         if(provider=="Cursor" && includeCredit) lines.Add("Credit："+(snapshot.Credits??"暂不可用")+" · 独立余额");
         return string.Join("\n",lines);
     }

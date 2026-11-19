@@ -11,6 +11,7 @@ internal sealed class DetailsWindow : GlassWindow
     private bool _positioning;
     private readonly C.StackPanel _body;
     private readonly List<(C.TextBlock Text, CodexBoardWidget.UsageWindow Window)> _resetTimes = new();
+    private readonly List<Action<DateTimeOffset>> _paceUpdates = new();
     private readonly C.Button _codexTab, _cursorTab;
     internal DetailsWindow(TaskbarContext context) : base(context.IsDark)
     {
@@ -89,6 +90,7 @@ internal sealed class DetailsWindow : GlassWindow
     internal void UpdateCountdowns()
     {
         foreach(var (text, window) in _resetTimes) text.Text = UsageLabels.Reset(window.ResetsAt, window.Duration, _context.CountdownNow);
+        foreach(var update in _paceUpdates) update(_context.CountdownNow);
     }
     internal void UpdateValues()
     {
@@ -100,7 +102,7 @@ internal sealed class DetailsWindow : GlassWindow
         C.Grid.SetColumnSpan(_cursorTab, settings.ShowCodex ? 1 : 2);
         _codexTab.Background = _context.CursorDetails ? System.Windows.Media.Brushes.Transparent : Colors.Hover;
         _cursorTab.Background = _context.CursorDetails ? Colors.Hover : System.Windows.Media.Brushes.Transparent;
-        _resetTimes.Clear(); _body.Children.Clear();
+        _resetTimes.Clear(); _paceUpdates.Clear(); _body.Children.Clear();
         var error = _context.CursorDetails ? _context.CursorError : _context.Error;
         if ((_context.CursorDetails ? _context.CursorSnapshot : _context.Snapshot) is not { } snapshot)
         {
@@ -113,16 +115,36 @@ internal sealed class DetailsWindow : GlassWindow
             var content = new C.StackPanel { Margin = new W.Thickness(15, 12, 15, 12) };
             content.Children.Add(new C.TextBlock { Text = w.Name, Foreground = Colors.Muted, FontSize = 13 });
             var amount = new C.StackPanel { Orientation = C.Orientation.Horizontal, Margin = new W.Thickness(0, 5, 0, 10) };
-            amount.Children.Add(new C.TextBlock { Text = $"{w.Remaining:0.#}%", FontFamily = new System.Windows.Media.FontFamily("Segoe UI"), FontSize = 30, FontWeight = W.FontWeights.SemiBold, Foreground = Colors.Accent });
+            var valueText = new C.TextBlock { Text = $"{w.Remaining:0.#}%", FontFamily = new System.Windows.Media.FontFamily("Segoe UI"), FontSize = 30, FontWeight = W.FontWeights.SemiBold, Foreground = Colors.Accent };
+            amount.Children.Add(valueText);
             amount.Children.Add(new C.TextBlock { Text = "剩余", FontSize = 12, Foreground = Colors.Muted, Margin = new W.Thickness(9, 0, 0, 5), VerticalAlignment = W.VerticalAlignment.Bottom });
             content.Children.Add(amount);
-            var track = new C.Grid { Height = 5, Margin = new W.Thickness(0, 0, 0, 9) };
-            track.Children.Add(new C.Border { CornerRadius = new W.CornerRadius(3), Background = Colors.Stroke });
-            var fill = new C.Border { CornerRadius = new W.CornerRadius(3), Background = Colors.Accent, HorizontalAlignment = W.HorizontalAlignment.Left };
+            var track = new C.Grid { Height = w.Duration == 10080 ? 11 : 5, Margin = new W.Thickness(0, 0, 0, 9) };
+            track.Children.Add(new C.Border { Height = 5, VerticalAlignment = W.VerticalAlignment.Center, CornerRadius = new W.CornerRadius(3), Background = Colors.Stroke });
+            var fill = new C.Border { Height = 5, VerticalAlignment = W.VerticalAlignment.Center, CornerRadius = new W.CornerRadius(3), Background = Colors.Accent, HorizontalAlignment = W.HorizontalAlignment.Left };
             track.SizeChanged += (_, _) => fill.Width = track.ActualWidth * Math.Clamp(w.Remaining / 100, 0, 1);
             track.Children.Add(fill); content.Children.Add(track);
             var resetText = new C.TextBlock { Text = UsageLabels.Reset(w.ResetsAt, w.Duration, _context.CountdownNow), FontSize = 12, Foreground = Colors.Muted, TextWrapping = W.TextWrapping.Wrap };
             content.Children.Add(resetText); _resetTimes.Add((resetText, w));
+            if (w.Duration == 10080)
+            {
+                var marker = new WeeklyPaceMark(w, Colors, 11);
+                track.Children.Add(marker);
+                var paceText = new C.TextBlock { FontSize = 12, TextWrapping = W.TextWrapping.Wrap, Margin = new W.Thickness(0, 7, 0, 0) };
+                content.Children.Add(paceText);
+                void UpdatePace(DateTimeOffset now)
+                {
+                    var pace = marker.Update(now, track.ActualWidth);
+                    var ink = pace?.IsAhead == true ? Colors.Warning : Colors.Accent;
+                    fill.Background = ink; valueText.Foreground = ink;
+                    paceText.Visibility = pace is null ? W.Visibility.Collapsed : W.Visibility.Visible;
+                    paceText.Text = pace?.Description ?? "";
+                    paceText.Foreground = pace?.IsAhead == true ? Colors.Warning : Colors.Muted;
+                    track.ToolTip = paceText.ToolTip = pace?.Tooltip;
+                }
+                track.SizeChanged += (_, _) => marker.Position(track.ActualWidth);
+                _paceUpdates.Add(UpdatePace); UpdatePace(_context.CountdownNow);
+            }
             _body.Children.Add(new C.Border { Background = Colors.Card, BorderBrush = Colors.Stroke, BorderThickness = new W.Thickness(1), CornerRadius = new W.CornerRadius(8), Margin = new W.Thickness(0, 4, 0, 4), Child = content });
         }
         if (_context.CursorDetails)

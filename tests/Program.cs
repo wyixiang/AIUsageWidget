@@ -83,3 +83,4 @@ popup = DetailsPlacement.Above(new(0,300,425,44),new(0,0,800,300),new(410,550),1
 Check(popup.Top==8 && popup.Bottom==292, "short work areas constrain details instead of placing them offscreen");
 LifecycleChecks.Run();
 TaskbarLayoutChecks.Run();
+WeeklyPaceChecks.Run();

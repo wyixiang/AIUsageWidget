@@ -15,6 +15,8 @@ internal sealed class Palette(bool dark)
     internal M.SolidColorBrush Stroke => Brush(dark ? "#29FFFFFF" : "#18000000");
     internal M.SolidColorBrush Card => Brush(dark ? "#20FFFFFF" : "#B3FFFFFF");
     internal M.SolidColorBrush Usage => Brush(dark ? "#88B4FF" : "#366FC9");
+    internal M.SolidColorBrush Warning => Brush(dark ? "#F0B36A" : "#A65E12");
+    internal M.SolidColorBrush PaceMarker => Brush(dark ? "#F1F5FA" : "#263F59");
     internal M.SolidColorBrush Track => Brush(dark ? "#354356" : "#DCE5EF");
     internal M.SolidColorBrush Accent => Brush(dark ? "#72DEC2" : "#00735C");
     internal static M.SolidColorBrush Brush(string color) => new((M.Color)M.ColorConverter.ConvertFromString(color));

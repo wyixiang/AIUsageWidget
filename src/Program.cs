@@ -243,6 +243,11 @@ internal sealed class TaskbarContext : IDisposable
                 CursorAvailable = CursorSnapshot is not null,
                 CursorUpdated = CursorSnapshot?.FetchedAt,
                 CursorRemaining = CursorSnapshot?.Windows.Select(w => new { w.Name, w.Remaining }),
+                WeeklyPacing = new
+                {
+                    Codex = Snapshot?.Windows.Where(w => w.Duration == 10080).Select(w => WeeklyPace.Evaluate(w, CountdownNow)).ToArray(),
+                    Cursor = CursorSnapshot?.Windows.Where(w => w.Duration == 10080).Select(w => WeeklyPace.Evaluate(w, CountdownNow)).ToArray()
+                },
                 CursorError,
                 Error
             }, new JsonSerializerOptions { WriteIndented = true }));
