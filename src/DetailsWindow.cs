@@ -138,7 +138,7 @@ internal sealed class DetailsWindow : GlassWindow
                     var ink = pace?.IsAhead == true ? Colors.Warning : Colors.Accent;
                     fill.Background = ink; valueText.Foreground = ink;
                     paceText.Visibility = pace is null ? W.Visibility.Collapsed : W.Visibility.Visible;
-                    paceText.Text = pace?.Description ?? "";
+                    paceText.Text = pace is null ? "" : $"预期应剩 {pace.ExpectedRemainingPercent:0.#}%\n{pace.ComparisonDetail}";
                     paceText.Foreground = pace?.IsAhead == true ? Colors.Warning : Colors.Muted;
                     track.ToolTip = paceText.ToolTip = pace?.Tooltip;
                 }
