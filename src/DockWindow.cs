@@ -80,7 +80,7 @@ internal sealed class DockWindow : GlassWindow
             ToolTip = Summary();
             return;
         }
-        var grid = new C.Grid { Margin = new W.Thickness(11, 2, 11, 2), Cursor = I.Cursors.Hand };
+        var grid = new C.Grid { Margin = new W.Thickness(TaskbarLayout.ContentInset - Surface.BorderThickness.Left, 2, TaskbarLayout.ContentInset - Surface.BorderThickness.Right, 2), Cursor = I.Cursors.Hand };
         void Section(W.FrameworkElement element, double width, bool cursor)
         {
             if (grid.ColumnDefinitions.Count > 0)
@@ -145,7 +145,7 @@ internal sealed class DockWindow : GlassWindow
         => cursor ? quota.Duration == 10080 ? "Wk" : "Plan" : quota.Duration == 300 ? "5h" : "Wk";
     private C.Grid StackedContent(Palette p)
     {
-        var grid = new C.Grid { Margin = new W.Thickness(11, 0, 11, 0), Cursor = I.Cursors.Hand };
+        var grid = new C.Grid { Margin = new W.Thickness(TaskbarLayout.ContentInset - Surface.BorderThickness.Left, 0, TaskbarLayout.ContentInset - Surface.BorderThickness.Right, 0), Cursor = I.Cursors.Hand };
         void Row(bool cursor)
         {
             var row = grid.RowDefinitions.Count;
