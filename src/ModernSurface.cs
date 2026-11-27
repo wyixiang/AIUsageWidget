@@ -201,11 +201,12 @@ internal sealed class ModernMenu : GlassWindow
             => items.Children.Add(Button(label, Colors, () => { HideSubmenu(); Close(); action(); }, icon, selected));
         Item("刷新额度", "\uE72C", () => _ = context.RefreshAsync());
         if (context.Settings.ShowCodex) Item("查看 Codex 额度", "\uE946", () => { context.CursorDetails = false; context.ShowDetails(); });
-        if (context.Settings.ShowCursor) Item("查看 Cursor 额度", "\uE8B0", () => { context.CursorDetails = true; context.ShowDetails(); });
+        if (context.ShowCursor) Item("查看 Cursor 额度", "\uE8B0", () => { context.CursorDetails = true; context.ShowDetails(); });
         Separator();
         Parent("显示内容", "\uE713", items =>
         {
             Child(items, "Codex", "\uE945", () => context.SetPlatformVisible(false, !context.Settings.ShowCodex), context.Settings.ShowCodex);
+            if (!context.CursorInstalled) return;
             Child(items, "Cursor", "\uE8B0", () => context.SetPlatformVisible(true, !context.Settings.ShowCursor), context.Settings.ShowCursor);
             Child(items, "Cursor Credit", "\uE8C7", () => context.SetCreditVisible(!context.Settings.ShowCursorCredit), context.Settings.ShowCursorCredit);
         }, 216);

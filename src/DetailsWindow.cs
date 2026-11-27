@@ -96,8 +96,8 @@ internal sealed class DetailsWindow : GlassWindow
     {
         var settings = _context.Settings;
         _codexTab.Visibility = settings.ShowCodex ? W.Visibility.Visible : W.Visibility.Collapsed;
-        _cursorTab.Visibility = settings.ShowCursor ? W.Visibility.Visible : W.Visibility.Collapsed;
-        C.Grid.SetColumnSpan(_codexTab, settings.ShowCursor ? 1 : 2);
+        _cursorTab.Visibility = _context.ShowCursor ? W.Visibility.Visible : W.Visibility.Collapsed;
+        C.Grid.SetColumnSpan(_codexTab, _context.ShowCursor ? 1 : 2);
         C.Grid.SetColumn(_cursorTab, settings.ShowCodex ? 1 : 0);
         C.Grid.SetColumnSpan(_cursorTab, settings.ShowCodex ? 1 : 2);
         _codexTab.Background = _context.CursorDetails ? System.Windows.Media.Brushes.Transparent : Colors.Hover;

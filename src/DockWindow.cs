@@ -70,7 +70,7 @@ internal sealed class DockWindow : GlassWindow
         _meters.Clear();
         _platformRegions.Clear();
         var settings = _context.Settings;
-        _layout = TaskbarLayout.Create(settings.ShowCodex, settings.ShowCursor, settings.ShowCursorCredit, _context.Snapshot?.Windows.Length ?? 0, settings.HorizontalWidthLimit);
+        _layout = TaskbarLayout.Create(settings.ShowCodex, _context.ShowCursor, settings.ShowCursorCredit, _context.Snapshot?.Windows.Length ?? 0, settings.HorizontalWidthLimit);
         Width = Math.Max(1, _layout.Width);
         var dark = _context.IsDark; UpdateBackdrop(dark); var p = new Palette(dark);
         Surface.Background = Palette.Brush(dark ? "#C8262C33" : "#C8F8FAFC"); Surface.BorderBrush = p.Stroke;
@@ -207,7 +207,7 @@ internal sealed class DockWindow : GlassWindow
     {
         var summaries = new List<string>();
         if (_context.Settings.ShowCodex) summaries.Add(UsageLabels.Summary("Codex", _context.Snapshot, _context.CountdownNow));
-        if (_context.Settings.ShowCursor) summaries.Add(UsageLabels.Summary("Cursor", _context.CursorSnapshot, _context.CountdownNow, _context.Settings.ShowCursorCredit));
+        if (_context.ShowCursor) summaries.Add(UsageLabels.Summary("Cursor", _context.CursorSnapshot, _context.CountdownNow, _context.Settings.ShowCursorCredit));
         return string.Join("\n\n", summaries);
     }
     internal void UpdateCountdowns()

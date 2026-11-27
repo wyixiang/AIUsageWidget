@@ -102,6 +102,8 @@ internal sealed class TaskbarContext : IDisposable
     internal UsageSnapshot? CursorSnapshot;
     internal string? CursorError;
     internal bool CursorDetails;
+    internal bool CursorInstalled { get; private set; }
+    internal bool ShowCursor => CursorInstalled && Settings.ShowCursor;
     internal DateTimeOffset CountdownNow { get; private set; } = DateTimeOffset.Now;
     internal readonly Preferences Settings = Preferences.Load();
     private DockWindow? _dock;
@@ -169,7 +171,7 @@ internal sealed class TaskbarContext : IDisposable
         {
             _dock = new DockWindow(this);
             AppDiagnostics.Event("dock-created", "ensure-resident-card");
-            if (Settings.ShowCodex || Settings.ShowCursor) _dock.Show();
+            if (Settings.ShowCodex || ShowCursor) _dock.Show();
         }
         if (_lastDark != IsDark) Repaint();
         _dock.DockToTaskbar();
@@ -200,7 +202,21 @@ internal sealed class TaskbarContext : IDisposable
         }
         async Task ReadCursor()
         {
-            try { CursorSnapshot = await Task.Run(() => CursorClient.ReadAsync(_lifetime.Token)); CursorError = null; }
+            try
+            {
+                var installed = await Task.Run(CursorInstallation.IsInstalled, _lifetime.Token);
+                if (_quitting) return;
+                if (installed != CursorInstalled)
+                {
+                    CursorInstalled = installed;
+                    CursorSnapshot = null;
+                    CursorError = null;
+                    UpdateDisplay();
+                }
+                if (!installed) return;
+                CursorSnapshot = await Task.Run(() => CursorClient.ReadAsync(_lifetime.Token));
+                CursorError = null;
+            }
             catch (OperationCanceledException) { if (!_lifetime.IsCancellationRequested) CursorError = "读取超时"; }
             catch (InvalidOperationException ex) { CursorError = ex.Message; }
             catch { CursorError = "连接失败，请稍后刷新"; }
@@ -228,7 +244,7 @@ internal sealed class TaskbarContext : IDisposable
                 TrayIconSize = _trayIconSize,
                 AnchoredToTaskbar = _dock is { IsDisposed: false } && _dock.Attached,
                 DisplayMode = "Taskbar-aligned independent window",
-                DisplayContent = new { Settings.ShowCodex, Settings.ShowCursor, Settings.ShowCursorCredit, Settings.HorizontalWidthLimit, Layout = _dock?.LayoutMode },
+                DisplayContent = new { Settings.ShowCodex, ShowCursor, ShowCursorCredit = ShowCursor && Settings.ShowCursorCredit, CursorInstalled, Settings.HorizontalWidthLimit, Layout = _dock?.LayoutMode },
                 MonitorDevice = _dock?.MonitorDevice,
                 MonitorIdentity = _dock?.MonitorIdentity,
                 PreferredMonitorIdentity = Settings.MonitorIdentity,
@@ -257,9 +273,9 @@ internal sealed class TaskbarContext : IDisposable
     }
     internal void ShowDetails()
     {
-        if (!Settings.ShowCodex && !Settings.ShowCursor) { _dock?.ShowModernMenu(); return; }
+        if (!Settings.ShowCodex && !ShowCursor) { _dock?.ShowModernMenu(); return; }
         if (!Settings.ShowCodex) CursorDetails = true;
-        else if (!Settings.ShowCursor) CursorDetails = false;
+        else if (!ShowCursor) CursorDetails = false;
         if (_details is null || _details.IsDisposed) _details = new DetailsWindow(this);
         System.Windows.Application.Current.MainWindow = _details;
 
@@ -311,9 +327,13 @@ internal sealed class TaskbarContext : IDisposable
     private void ApplyDisplaySettings(bool updateDetails = true)
     {
         Settings.Save();
+        UpdateDisplay(updateDetails);
+    }
+    private void UpdateDisplay(bool updateDetails = true)
+    {
         if (!Settings.ShowCodex) CursorDetails = true;
-        else if (!Settings.ShowCursor) CursorDetails = false;
-        if (!Settings.ShowCodex && !Settings.ShowCursor) DismissDetails();
+        else if (!ShowCursor) CursorDetails = false;
+        if (!Settings.ShowCodex && !ShowCursor) DismissDetails();
         _dock?.Invalidate(); _dock?.DockToTaskbar();
         if (updateDetails && _details is { IsDisposed: false }) _details.UpdateValues();
         PositionDetails(); WriteStatus();

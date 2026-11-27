@@ -83,4 +83,23 @@ popup = DetailsPlacement.Above(new(0,300,425,44),new(0,0,800,300),new(410,550),1
 Check(popup.Top==8 && popup.Bottom==292, "short work areas constrain details instead of placing them offscreen");
 LifecycleChecks.Run();
 TaskbarLayoutChecks.Run();
+var cursorFixture = Directory.CreateTempSubdirectory("cursor install ");
+var cursorExe = Path.Combine(cursorFixture.FullName, "Cursor.exe");
+var cursorState = Path.Combine(cursorFixture.FullName, "state.vscdb");
+try
+{
+    File.WriteAllText(cursorState, "");
+    File.WriteAllText(cursorExe, "");
+    Check(CursorInstallation.ContainsExecutable(cursorExe) && CursorInstallation.ContainsExecutable($"\"{cursorExe}\" --open-url \"%1\""),
+        "custom install paths and URL handlers locate a closed Cursor installation");
+    File.Delete(cursorExe);
+    Check(!CursorInstallation.ContainsExecutable(cursorExe) && !CursorInstallation.ContainsExecutable(cursorState),
+        "stale app paths and retained login data do not count as an installation");
+}
+finally
+{
+    File.Delete(cursorExe);
+    File.Delete(cursorState);
+    cursorFixture.Delete();
+}
 WeeklyPaceChecks.Run();
